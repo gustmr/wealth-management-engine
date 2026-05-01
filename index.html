@@ -1,0 +1,2128 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Investments</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <p>Loading your data...</p>
+    </div>
+    <input type="file" id="import-backup-comparacao-input" accept=".json" style="display: none;">
+    <input type="file" id="restore-file-input" accept=".json" style="display: none;">
+    <input type="file" id="input-arquivo-cotacoes" accept=".csv" style="display: none;">
+    <input type="file" id="input-cadastros-csv" accept=".csv" style="display: none;">
+    <input type="file" id="input-arquivo-proventos" accept=".csv" style="display: none;">
+    <div id="modal-calendario-recorrentes" class="modal">
+        <div class="modal-content" style="max-width: 95%; width: 1600px;">
+            <h3 id="modal-calendario-recorrentes-titulo">Recurring Transaction Calendar</h3>
+            <div id="calendario-recorrentes-container"></div>
+            <p class="info-esc">Click outside to close</p>
+        </div>
+    </div>
+    <div id="modal-historico-ativo-snapshot" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <h3 id="modal-historico-ativo-snapshot-titulo">Asset History</h3>
+            <div class="grafico-barras-container" style="height: 300px; margin-top: 20px;">
+                <canvas id="grafico-historico-ativo-snapshot"></canvas>
+            </div>
+            <div id="container-historico-ativo-snapshot" class="tabela-projecao-wrapper" style="margin-top: 20px;">
+                </div>
+            <p class="info-esc">Click outside to close</p>
+        </div>
+    </div>
+    <div id="modal-lista-ativos-cnpj" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h3 id="modal-cnpj-titulo"></h3>
+            <div id="modal-cnpj-conteudo" style="margin-top: 15px; font-size: 1.1em; line-height: 1.6;">
+            </div>
+            <p class="info-esc">Click outside to close</p>
+        </div>
+    </div>
+    <div id="modal-cadastro-ativo-rf" class="modal">
+        <div class="modal-content">
+            <h3 id="modal-ativo-rf-titulo">New Fixed Income Investment</h3>
+            <form id="form-cadastro-ativo-rf">
+                <input type="hidden" id="ativo-rf-id">
+                <div class="form-group">
+                    <label for="ativo-rf-descricao">Asset Description</label>
+                    <input type="text" id="ativo-rf-descricao" placeholder="Ex: UK Gilt 5% / Bond" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="ativo-rf-instituicao">Institution/Broker</label>
+                        <select id="ativo-rf-instituicao" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ativo-rf-valor-investido">Invested Amount (£)</label>
+                        <input type="text" id="ativo-rf-valor-investido" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="ativo-rf-data-aplicacao">Investment Date</label>
+                        <input type="date" id="ativo-rf-data-aplicacao" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="ativo-rf-data-vencimento">Maturity Date</label>
+                        <input type="date" id="ativo-rf-data-vencimento" required>
+                    </div>
+                </div>
+                <div class="form-group" style="flex-direction: row; align-items: center; gap: 10px;">
+                    <input type="checkbox" id="ativo-rf-isento-ir" style="width: auto;">
+                    <label for="ativo-rf-isento-ir" style="margin: 0;">This investment is Tax-Free (ISA/Allowance)</label>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Save Investment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="modal-aporte-rf" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h3>Contribute to Fixed Income</h3>
+            <p>Asset: <strong id="aporte-rf-descricao"></strong></p>
+            <form id="form-aporte-rf">
+                <input type="hidden" id="aporte-rf-id">
+                <div class="form-group">
+                    <label for="aporte-rf-valor">Contribution Value (£)</label>
+                    <input type="text" id="aporte-rf-valor" required>
+                </div>
+                <div class="form-group">
+                    <label for="aporte-rf-data">Contribution Date</label>
+                    <input type="date" id="aporte-rf-data" required>
+                </div>
+                <div class="form-group">
+                    <label for="aporte-rf-conta-origem">Source Account</label>
+                    <select id="aporte-rf-conta-origem" required></select>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Confirm Contribution</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-resgate-rf" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h3>Redeem from Fixed Income</h3>
+            <p>Asset: <strong id="resgate-rf-descricao"></strong></p>
+            <p>Current Net Balance: <strong id="resgate-rf-saldo-atual"></strong></p>
+            <form id="form-resgate-rf">
+                <input type="hidden" id="resgate-rf-id">
+                 <div class="form-group">
+                    <label for="resgate-rf-valor">Net Redeemed Value (£)</label>
+                    <input type="text" id="resgate-rf-valor" required>
+                </div>
+                <div class="form-group">
+                    <label for="resgate-rf-data">Redemption Date</label>
+                    <input type="date" id="resgate-rf-data" required>
+                </div>
+                <div class="form-group">
+                    <label for="resgate-rf-conta-destino">Destination Account</label>
+                    <select id="resgate-rf-conta-destino" required></select>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Confirm Redemption</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-historico-rf" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <h3 id="historico-rf-titulo">Transaction History</h3>
+            <p>Asset: <strong id="historico-rf-descricao"></strong></p>
+            <div id="historico-rf-container"></div>
+            <div class="form-actions">
+            </div>
+        </div>
+    </div>
+    <div id="modal-performance-ativo-grafico" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <h3 id="modal-performance-ativo-titulo"></h3>
+            <div id="modal-performance-ativo-info" style="text-align: center; margin-bottom: 20px; font-size: 1.1em;"></div>
+            <div style="height: 120px; margin-top: 20px;">
+                <canvas id="grafico-comparativo-preco"></canvas>
+            </div>
+            <p class="info-esc">Click outside to close</p>
+        </div>
+    </div>
+    <div id="modal-detalhes-ir-mes" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <h3 id="modal-detalhes-ir-titulo"></h3>
+            <div id="modal-detalhes-ir-conteudo">
+            </div>
+            <p class="info-esc">Click outside to close</p>
+        </div>
+    </div>
+    <div id="modal-evento-ativo" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <h3 id="modal-evento-ativo-titulo">Register Asset Event</h3>
+            <form id="form-evento-ativo">
+                <input type="hidden" id="evento-ativo-id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="evento-ativo-tipo">Event Type</label>
+                        <select id="evento-ativo-tipo" required>
+                            <option value="">Select...</option>
+                            <option value="entrada">Asset Inflow (Deposit/Bonus)</option>
+                            <option value="saida">Asset Outflow (Withdrawal)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="evento-ativo-data">Event Date</label>
+                        <input type="date" id="evento-ativo-data" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="evento-ativo-ticker">Asset (Ticker)</label>
+                    <input type="text" id="evento-ativo-ticker" class="ticker-input" required>
+                </div>
+
+                <div id="container-evento-entrada-fields" style="display: none;">
+                    <p style="font-size: 0.9em; color: #555; margin-top: 15px;">Enter the acquisition cost (average price) and the quantity entered for each broker.</p>
+                    <div class="form-group">
+                        <label for="evento-ativo-pm">Acquisition Average Price (£)</label>
+                        <input type="text" id="evento-ativo-pm" placeholder="For bonuses, use 0.00" required>
+                    </div>
+                    <h4>Quantity per Broker</h4>
+                    <div id="evento-entrada-corretoras-container">
+                        </div>
+                </div>
+
+                <div id="container-evento-saida-fields" style="display: none;">
+                    <p style="font-size: 0.9em; color: #555; margin-top: 15px;">Your position on the selected date is below. Enter the quantity to be removed from each broker.</p>
+                    <div id="evento-saida-posicao-container">
+                         </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Save Event</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-corrigir-proventos-orfaos" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <h3>Fix Position for Orphaned Income</h3>
+            <p>For the income listed below, no position was found on the "Ex-Date" (Data Com). Please enter the quantity and average price you held on that date to correct the history.</p>
+            <form id="form-correcao-proventos">
+                <div id="lista-proventos-orfaos-container" style="max-height: 400px; overflow-y: auto; margin-top: 15px;">
+                    </div>
+                <div class="form-actions">
+                    <button type="button" id="btn-salvar-correcao-proventos" class="btn btn-success">Save Corrections</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="modal-corrigir-contas-sem-moeda" class="modal">
+        <div class="modal-content" style="max-width: 950px;">
+            <h3>Fix Accounts without Currency</h3>
+            <p>The accounts below were registered before multi-currency support. Please specify the currency for each one. For BRL accounts, confirm or update bank details.</p>
+            <form id="form-correcao-contas-sem-moeda">
+                <div id="lista-contas-sem-moeda-container" style="max-height: 500px; overflow-y: auto; margin-top: 15px;">
+                    </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Save Corrections</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="modal-nova-transacao-moeda" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <h3 id="modal-transacao-moeda-titulo">New Transaction</h3>
+            <form id="form-nova-transacao-moeda">
+                <input type="hidden" id="transacao-moeda-id">
+                <input type="hidden" id="transacao-moeda-transferencia-id">
+                <input type="hidden" id="transacao-moeda-source-mae-id">
+                <input type="hidden" id="transacao-moeda-source-ocorrencia-data">
+                <div class="form-group" id="tipo-transacao-moeda-seletor">
+                    <label>Transaction Type</label>
+                    <div class="radio-group">
+                        <input type="radio" id="tipo-transacao-moeda-unica" name="tipo-transacao-moeda" value="unica" checked>
+                        <label for="tipo-transacao-moeda-unica">Single / Transfer</label>
+                        <input type="radio" id="tipo-transacao-moeda-recorrente" name="tipo-transacao-moeda" value="recorrente">
+                        <label for="tipo-transacao-moeda-recorrente">Recurring</label>
+                    </div>
+                </div>
+            
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="transacao-moeda-data">Date</label>
+                        <input type="date" id="transacao-moeda-data" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="transacao-moeda-valor-debito">Value</label>
+                        <div class="input-com-simbolo">
+                            <span class="moeda-simbolo" id="transacao-moeda-simbolo-debito"></span>
+                            <input type="text" id="transacao-moeda-valor-debito" required>
+                        </div>
+                    </div>
+                </div>
+            
+                <div class="form-group" id="container-valor-credito" style="display: none;">
+                    <label for="transacao-moeda-valor-credito">Credit Value (in destination currency)</label>
+                    <div class="input-com-simbolo">
+                        <span class="moeda-simbolo" id="transacao-moeda-simbolo-credito"></span>
+                        <input type="text" id="transacao-moeda-valor-credito">
+                    </div>
+                    <small id="info-cambio" style="font-style: italic; color: #555; margin-top: 5px;"></small>
+                </div>
+            
+                <div id="container-contas-transferencia-moeda" class="form-row">
+                    <div class="form-group">
+                        <label for="transacao-moeda-conta-debito">Debit Account (Source)</label>
+                        <select id="transacao-moeda-conta-debito"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="transacao-moeda-conta-credito">Credit Account (Destination)</label>
+                        <select id="transacao-moeda-conta-credito"></select>
+                    </div>
+                </div>
+                <div id="container-contas-recorrente-moeda" class="form-row" style="display: none;">
+                    <div class="form-group">
+                        <label for="transacao-moeda-tipo-recorrente">Movement Type</label>
+                        <select id="transacao-moeda-tipo-recorrente">
+                            <option value="entrada">Inflow</option>
+                            <option value="saida">Outflow</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="transacao-moeda-ativo-recorrente">Asset/Account</label>
+                        <select id="transacao-moeda-ativo-recorrente"></select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="transacao-moeda-descricao">Description (Optional for transfers)</label>
+                    <input type="text" id="transacao-moeda-descricao">
+                </div>
+                
+                <div id="recorrencia-moeda-options" style="display: none;">
+                    <hr>
+                    <h4>Recurrence Details</h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="recorrencia-moeda-frequencia">Frequency</label>
+                            <select id="recorrencia-moeda-frequencia">
+                                <option value="mensal">Monthly</option>
+                                <option value="quinzenal">Fortnightly (14 days)</option>
+                                <option value="semanal">Weekly</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="recorrencia-moeda-dia-mes-group">
+                            <label for="recorrencia-moeda-dia-mes">Day of Month</label>
+                            <input type="number" id="recorrencia-moeda-dia-mes" min="1" max="31">
+                        </div>
+                        <div class="form-group" id="recorrencia-moeda-dia-semana-group" style="display: none;">
+                            <label for="recorrencia-moeda-dia-semana">Day of Week</label>
+                            <select id="recorrencia-moeda-dia-semana">
+                                <option value="1">Monday</option> <option value="2">Tuesday</option> <option value="3">Wednesday</option>
+                                <option value="4">Thursday</option> <option value="5">Friday</option> <option value="6">Saturday</option> <option value="0">Sunday</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Termination Condition</label>
+                        <div class="radio-group">
+                            <input type="radio" id="termino-moeda-ocorrencias" name="tipo-termino-moeda" value="ocorrencias" checked>
+                            <label for="termino-moeda-ocorrencias">After X times</label>
+                            <input type="radio" id="termino-moeda-data" name="tipo-termino-moeda" value="data">
+                            <label for="termino-moeda-data">On a specific date</label>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" id="termino-moeda-ocorrencias-valor-group">
+                            <label for="termino-moeda-ocorrencias-valor">Number of Occurrences</label>
+                            <input type="number" id="termino-moeda-ocorrencias-valor" min="2" placeholder="e.g. 12">
+                        </div>
+                        <div class="form-group" id="termino-moeda-data-valor-group" style="display: none;">
+                            <label for="termino-moeda-data-valor">End Date</label>
+                            <input type="date" id="termino-moeda-data-valor">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Save Transaction</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-acao-recorrente" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <span class="close-btn" id="fechar-modal-recorrente-btn">&times;</span> 
+            <h3>Recurring Transaction Action</h3>
+            <p>What would you like to do with this occurrence?</p>
+            <p><strong>Description:</strong> <span id="recorrente-info-descricao"></span></p>
+            <p><strong>Value:</strong> <span id="recorrente-info-valor"></span> | <strong>Date:</strong> <span id="recorrente-info-data"></span></p>
+            
+            <hr>
+            
+            <div id="recorrente-botoes-acao">
+                </div>
+
+            <button class="btn-cancelar" onclick="fecharModal('modal-acao-recorrente')">Cancel</button>
+        </div>
+    </div>
+    <div id="modal-balanceamento-detalhes" class="modal">
+        <div class="modal-content" style="max-width: 1200px;">
+            <h3 id="modal-balanceamento-titulo">Rebalancing Analysis</h3>
+            <div id="modal-balanceamento-container"></div>
+            <p class="info-esc">Click outside to close</p>
+        </div>
+    </div>
+    <div id="modal-evento-corporativo" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <h3 id="modal-evento-titulo">Register Corporate Event</h3>
+            <form id="form-evento-corporativo">
+                <input type="hidden" id="evento-id">
+                <div class="form-row">
+                    <div class="form-group" style="flex-grow: 3;">
+                        <label for="evento-ticker">Asset (Ticker)</label>
+                        <input type="text" id="evento-ticker" class="ticker-input" required>
+                    </div>
+                     <div class="form-group">
+                        <label for="evento-data">Ex-Date</label>
+                        <input type="date" id="evento-data" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="evento-tipo">Event Type</label>
+                        <select id="evento-tipo" required>
+                            <option value="">Select...</option>
+                            <option value="split">Forward Split</option>
+                            <option value="grupamento">Reverse Split (Consolidation)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Ratio (From)</label>
+                        <input type="number" id="evento-proporcao-de" min="1" required placeholder="e.g. 10">
+                    </div>
+                    <div class="form-group">
+                        <label>Ratio (To)</label>
+                        <input type="number" id="evento-proporcao-para" min="1" required placeholder="e.g. 1">
+                    </div>
+                </div>
+                <p style="font-size: 0.85em; color: #666; margin-top: -10px;">
+                    E.g.: For a 10-for-1 reverse split, enter From: 10, To: 1. <br>
+                    For a 1-for-4 forward split, enter From: 1, To: 4.
+                </p>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Save Event</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="modal-corrigir-data" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h3 id="modal-corrigir-data-titulo">Correct Record Date</h3>
+            <p id="modal-corrigir-data-descricao"></p>
+            <form id="form-corrigir-data">
+                <input type="hidden" id="corrigir-data-record-type">
+                <input type="hidden" id="corrigir-data-record-id">
+                <div class="form-group">
+                    <label for="corrigir-data-input">New Date</label>
+                    <input type="date" id="corrigir-data-input" required>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Save New Date</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="modal-performance-detalhes" class="modal">
+        <div class="modal-content" style="max-width: 950px;">
+            <h3 id="modal-tir-titulo">Internal Rate of Return (IRR)</h3>
+            <div id="modal-tir-container-geral"></div>
+            <hr style="margin: 20px 0;">
+            <div id="modal-tir-container-individual"></div>
+            <p class="info-esc">Click outside to close</p>
+        </div>
+    </div>
+    <div id="modal-resumo-dividendos-ativo" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="page-header" style="justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 id="modal-resumo-dividendos-titulo" style="margin-bottom: 0;">Asset Income Summary</h3>
+                <i class="fas fa-print fa-lg acao-btn" id="btn-imprimir-resumo-ativo" title="Print Asset Report"></i>
+            </div>
+            <div id="resumo-dividendos-container">
+                <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px 25px; margin-top: 15px;">
+                    ${projectionHtml}
+                </div>
+                
+                <div style="margin-top: 25px;">
+                    <h4>Annual Income History</h4>
+                    <div class="grafico-barras-container" style="height: 300px;">
+                        <canvas id="grafico-resumo-proventos-anual"></canvas>
+                    </div>
+                </div>
+                ${frequenciaHtml}
+                </div>
+            <p class="info-esc">Click outside to close</p>
+        </div>
+    </div>
+    <div id="modal-edicao-transacao-provento" class="modal">
+        <div class="modal-content">
+            <h3>Edit Received Income Value</h3>
+            <form id="form-edicao-transacao-provento">
+                <input type="hidden" id="edit-trans-provento-id">
+                <p>You are editing the amount received in your account regarding an income payment. This change will NOT alter the original income record.</p>
+                <div class="form-grid">
+                    <div class="form-group"><label>Asset</label><input type="text" id="edit-trans-provento-ticker" readonly></div>
+                    <div class="form-group"><label>Type</label><input type="text" id="edit-trans-provento-tipo" readonly></div>
+                    <div class="form-group"><label>Pay Date</label><input type="text" id="edit-trans-provento-data" readonly></div>
+                </div>
+                <div class="form-group">
+                    <label for="edit-trans-provento-valor">New Total Value Received (£)</label>
+                    <input type="text" id="edit-trans-provento-valor" required>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Save Change</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="modal-cadastro-feriado" class="modal">
+        <div class="modal-content">
+            <h3 id="modal-feriado-titulo">Register New Holiday</h3>
+            <form id="form-cadastro-feriado">
+                <input type="hidden" id="feriado-id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="feriado-data">Date</label>
+                        <input type="date" id="feriado-data" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="feriado-descricao">Description</label>
+                        <input type="text" id="feriado-descricao" required>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Save Holiday</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="modal-cadastro-conta" class="modal">
+        <div class="modal-content">
+            <h3 id="modal-conta-titulo">Register New Account / Currency Asset</h3>
+            <form id="form-cadastro-conta">
+                <input type="hidden" id="conta-id">
+                <input type="hidden" id="conta-tipo-original">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="conta-moeda">Currency</label>
+                        <select id="conta-moeda" required>
+                            <option value="BRL">Real (BRL)</option>
+                            <option value="USD">Dollar (USD)</option>
+                            <option value="EUR">Euro (EUR)</option>
+                            <option value="GBP">Pound (GBP)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="container-nome-ativo-moeda">
+                        <label for="conta-nome-ativo">Account / Asset Name</label>
+                        <input type="text" id="conta-nome-ativo" placeholder="Ex: Interactive Brokers Account">
+                    </div>
+                </div>
+                <div id="container-detalhes-brl">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="conta-banco">Bank</label>
+                            <select id="conta-banco">
+                                <option value="">Select...</option>
+                                <option value="Nubank">Nubank</option>
+                                <option value="XP">XP</option>
+                                <option value="RICO">RICO</option>
+                                <option value="ÍON ITAÚ">ÍON ITAÚ</option>
+                                <option value="TORO">TORO</option>
+                                <option value="Outro">Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="container-outro-banco" style="display: none;">
+                            <label for="conta-outro-banco">Bank Name</label>
+                            <input type="text" id="conta-outro-banco">
+                        </div>
+                        <div class="form-group">
+                            <label for="conta-tipo">Account Type</label>
+                            <select id="conta-tipo">
+                                <option value="Conta Corrente">Current Account</option>
+                                <option value="Conta Investimento">Investment Account</option>
+                                <option value="Poupança">Savings</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label for="conta-numero-banco">Bank Number</label><input type="text" id="conta-numero-banco"></div>
+                        <div class="form-group"><label for="conta-agencia">Branch</label><input type="text" id="conta-agencia"></div>
+                        <div class="form-group"><label for="conta-numero">Account Number</label><input type="text" id="conta-numero"></div>
+                    </div>
+                    <div class="form-row">
+                         <div class="form-group">
+                            <label for="conta-pix">Pix Key</label>
+                            <input type="text" id="conta-pix">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="conta-saldo-inicial" id="label-saldo-inicial">Initial Balance (BRL)</label>
+                        <input type="text" id="conta-saldo-inicial" placeholder="1000.00" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="conta-data-saldo-inicial">Initial Balance Date</label>
+                        <input type="date" id="conta-data-saldo-inicial" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="conta-notas">Notes (include "inativa" or "encerrada" to hide account)</label>
+                    <textarea id="conta-notas" rows="3"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="modal-lancamento-provento" class="modal">
+        <div class="modal-content">
+            <h3 id="provento-modal-titulo">Record Income</h3>
+            <form id="form-lancamento-provento">
+                <input type="hidden" id="provento-id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="provento-ativo">Asset</label>
+                        <input type="text" id="provento-ativo" class="ticker-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="provento-tipo">Type</label>
+                        <select id="provento-tipo" required>
+                            <option value="">Select...</option>
+                            <option value="Rendimento">Income (Yield)</option>
+                            <option value="Dividendo">Dividend</option>
+                            <option value="JCP">Interest on Equity (JCP)</option>
+                            <option value="Bonificação">Bonus</option>
+                            <option value="Outros">Others</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="provento-data-com">Ex-Date (Data Com)</label>
+                        <input type="date" id="provento-data-com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="provento-data-pagamento">Payment Date</label>
+                        <input type="date" id="provento-data-pagamento" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="provento-valor-individual">Gross Value per Unit (£)</label>
+                        <input type="text" id="provento-valor-individual" placeholder="Use dot for decimals" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="provento-ir">Income Tax Rate (%)</label>
+                        <input type="text" id="provento-ir" placeholder="Ex: 15">
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Save Income</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="modal-posicao-inicial" class="modal">
+        <div class="modal-content">
+            <h3 id="posicao-modal-titulo">Add Initial Position</h3>
+            <form id="form-posicao-inicial">
+                <input type="hidden" id="posicao-id">
+                <div class="form-row">
+                    <div class="form-group"><label for="posicao-ativo">Asset</label><input type="text" id="posicao-ativo" class="ticker-input" required></div>
+                    <div class="form-group"><label for="posicao-data">Position Date</label><input type="date" id="posicao-data" required></div>
+                </div>
+                 <div class="form-group"><label for="posicao-preco-medio">Acquisition Average Price</label><input type="text" id="posicao-preco-medio" placeholder="Use dot for decimals" required></div>
+                <hr style="margin: 20px 0;">
+                <h4>Positions per Broker</h4>
+                <div id="posicoes-corretoras-container"></div>
+                <button type="button" class="btn btn-primary btn-add-row" id="btn-add-corretora-row"><i class="fas fa-plus"></i> Add Broker</button>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Save Position</button>
+                </div>
+            </form>
+        </div>
+    </div>
+<div id="modal-cadastro-ativo" class="modal">
+        <div class="modal-content">
+            <h3 id="modal-ativo-titulo">Register New Asset</h3>
+            <form id="form-cadastro-ativo">
+                <input type="hidden" id="ativo-id">
+                <div class="form-row">
+                    <div class="form-group" style="flex-basis: 200px; flex-grow: 2;"><label for="ativo-ticker">Ticker</label><input type="text" id="ativo-ticker" class="ticker-input" required></div>
+                    <div class="form-group"><label for="ativo-tipo">Asset Type</label><select id="ativo-tipo" required><option value="">Select...</option><option value="Ação">Share</option><option value="FII">REIT</option><option value="ETF">ETF</option></select></div>
+                </div>
+                <div class="form-group"><label for="ativo-nome-pregao">Trading Name</label><input type="text" id="ativo-nome-pregao"></div>
+                <div class="form-group"><label for="ativo-nome">Asset/Fund Name</label><input type="text" id="ativo-nome"></div>
+                <div class="form-group"><label for="ativo-cnpj">Tax ID (CNPJ)</label><input type="text" id="ativo-cnpj" maxlength="18"></div>
+                
+                <div id="acao-tipo-fields" style="display: none;">
+                    <hr>
+                    <h4>Share Details</h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="ativo-tipo-acao">Share Type</label>
+                            <select id="ativo-tipo-acao">
+                                <option value="">N/A</option>
+                                <option value="ON">Common (ON)</option>
+                                <option value="PN">Preferred (PN)</option>
+                                <option value="Unit">Unit</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="acao-meta-yield-bazin-fields">
+                            <label for="ativo-meta-yield-bazin">Yield Goal (Bazin) (%)</label>
+                            <input type="text" id="ativo-meta-yield-bazin" placeholder="6.00">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="fii-admin-fields" style="display: none;">
+                    <hr>
+                    <h4>Administrator Data (REITs Only)</h4>
+                    <div class="form-group"><label for="ativo-admin-nome">Administrator Name</label><input type="text" id="ativo-admin-nome"></div>
+                    <div class="form-group"><label for="ativo-admin-cnpj">Administrator Tax ID (CNPJ)</label><input type="text" id="ativo-admin-cnpj" maxlength="18"></div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save Asset</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="modal-edicao-operacao" class="modal">
+        <div class="modal-content">
+            <h3>Edit Operation</h3>
+            <form id="form-edicao-operacao">
+                <input type="hidden" id="edit-op-id">
+                <div class="form-grid">
+                    <div class="form-group"><label for="edit-op-ativo">Asset</label><input type="text" id="edit-op-ativo" required class="ticker-input" readonly></div>
+                    <div class="form-group"><label for="edit-op-tipo">Operation</label><select id="edit-op-tipo"><option value="compra">Buy</option><option value="venda">Sell</option></select></div>
+                    <div class="form-group"><label for="edit-op-quantidade">Quantity</label><input type="number" id="edit-op-quantidade" step="1" required></div>
+                    <div class="form-group"><label for="edit-op-valor">Total Value</label><input type="text" id="edit-op-valor" required></div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="modal-informar-valores-venda" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <h3>Fix Historical Sale Values</h3>
+            <p>The sales below were recorded in your history but lack an associated sale value. Please enter the total sale value (excluding costs) for each operation to ensure accurate Tax calculations.</p>
+            <form id="form-valores-venda">
+                <div id="lista-vendas-historicas-container" style="max-height: 400px; overflow-y: auto; margin-top: 15px;">
+                    </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Save Entered Values</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="modal-proventos-calendario" class="modal">
+        <div class="modal-content" style="max-width: 95%; width: 1400px;">
+            <h3 id="modal-calendario-titulo">
+                REIT Income Calendar
+            </h3>
+            <div id="calendario-container"></div>
+            <p class="info-esc">Click outside to close</p>
+        </div>
+    </div>
+    <div id="modal-proventos-calendario-acoes" class="modal">
+        <div class="modal-content" style="max-width: 95%; width: 1400px;">
+            <h3 id="modal-calendario-acoes-titulo">
+                Share Income Calendar
+            </h3>
+            <div id="calendario-container-acoes"></div>
+            <p class="info-esc">Click outside to close</p>
+        </div>
+    </div>
+    <div id="modal-proventos-anuais" class="modal">
+        <div class="modal-content" style="max-width: 1000px;">
+            <h3>Annual Income Summary</h3>
+            <div id="container-proventos-anuais">
+                </div>
+            <div id="footnotes-proventos-anuais" style="margin-top: 15px; font-size: 0.85em; color: #555;">
+                </div>
+            <p class="info-esc">Click outside to close</p>
+        </div>
+    </div>
+    <div id="modal-projecao-futura" class="modal">
+        <div class="modal-content" style="max-width: 95%; width: 1400px;">
+            <h3 id="modal-projecao-titulo">Future Balance Projection</h3>
+            <div id="container-projecao-futura"></div>
+            <p class="info-esc">Click outside to close</p>
+        </div>
+    </div>
+    <div id="modal-detalhes-rendimento" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3 id="modal-detalhes-rendimento-titulo">Income Details</h3>
+                <span class="close-btn">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="container-detalhes-rendimento" class="tabela-projecao-wrapper">
+                    </div>
+            </div>
+        </div>
+    </div>
+    <div id="modal-dashboard-detalhes" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <h3 id="modal-dashboard-detalhes-titulo"></h3>
+            <div id="modal-dashboard-detalhes-conteudo">
+            </div>
+            <p class="info-esc">Click outside to close</p>
+        </div>
+    </div>
+
+    <nav class="sidebar">
+        <ul>
+            <li class="menu-item">
+                <a href="#" data-tela="dashboard">
+                    <i class="fas fa-chart-pie"></i>
+                    <span>Dashboard</span>
+                    <div id="dashboard-alert-icon-container" title="Check portfolio status and alerts">
+                        <i class="fas fa-info-circle dashboard-alert-icon" id="dashboard-alert-icon"></i>
+                        <span class="dashboard-alert-badge" id="dashboard-alert-badge" style="display: none;">0</span>
+                    </div>
+                    </a>
+            </li>
+            <li class="menu-item" id="menu-investimentos">
+                <div class="menu-parent"><span class="icon"><i class="fas fa-briefcase"></i></span> Investments</div>
+                 <ul class="submenu">
+                    <li><a data-tela="rendaVariavel"><span class="icon"><i class="fas fa-chart-line"></i></span> Variable Income</a></li>
+                    <li><a data-tela="rendaFixa"><span class="icon"><i class="fas fa-piggy-bank"></i></span> Fixed Income</a></li>
+                    <li><a data-tela="listaNotas"><span class="icon"><i class="fas fa-receipt"></i></span> Trading Notes</a></li>
+                    <li><a data-tela="negociar"><span class="icon"><i class="fas fa-exchange-alt"></i></span> Trading Simulator</a></li>
+                    <li><a data-tela="consultaBalanceamento"><span class="icon"><i class="fas fa-balance-scale"></i></span> Strategic Allocation</a></li>
+                </ul>
+            </li>
+             <li class="menu-item"><a data-tela="caixaGlobal"><span class="icon"><i class="fas fa-landmark"></i></span> Accounts</a></li>
+            <li class="menu-item" id="menu-proventos">
+                <div class="menu-parent"><span class="icon"><i class="fas fa-donate"></i></span> Income</div>
+                <ul class="submenu">
+                    <li><a data-tela="calendarioGeral"><span class="icon"><i class="fas fa-calendar-alt"></i></span> Payment Calendar</a></li>
+                    <li><a data-tela="calendarioAcoes"><span class="icon"><i class="fas fa-calendar-check"></i></span> Share Calendar</a></li>
+                    <li><a data-tela="proventos">Records</a></li>
+                </ul>
+            </li>
+            <li class="menu-item"><a data-tela="metas"><span class="icon"><i class="fas fa-bullseye"></i></span> Goals</a></li>
+            <li class="menu-item"><a data-tela="calculadoraIR"><span class="icon"><i class="fas fa-calculator"></i></span> Tax Calculator</a></li>
+            <li class="menu-item" id="menu-lancamentos">
+                <div class="menu-parent"><span class="icon"><i class="fas fa-edit"></i></span> Registers</div>
+                <ul class="submenu">
+                    <li><a data-tela="cadastroRF">Fixed Income</a></li>
+                    <li><a data-tela="cadastroContas">Accounts</a></li>
+                    <li><a data-tela="cadastroAtivos">Assets (Var. Income)</a></li>
+                    <li><a data-tela="feriados">Holidays</a></li>
+                    <li><a data-tela="posicaoInicial">Initial Position (VI)</a></li>
+                </ul>
+            </li>
+            <li class="menu-item" id="menu-consultas">
+                <div class="menu-parent"><span class="icon"><i class="fas fa-search"></i></span> Queries</div>
+                <ul class="submenu">
+                    <li><a data-tela="posicaoCorretora">Position by Broker</a></li>
+                    <li><a data-tela="historicoSnapshots"><span class="icon"><i class="fas fa-layer-group"></i></span> Snapshot History</a></li>
+                    <li><a data-tela="posicoesZeradas">Zeroed Positions</a></li>
+                    <li><a data-tela="historicoMovimentacao">Movement History</a></li>
+                    <li><a data-tela="crescimentoPatrimonial">Wealth Growth</a></li>
+                    <li><a data-tela="performanceRV"><span class="icon"><i class="fas fa-rocket"></i></span> Asset Performance (VI)</a></li>
+                </ul>
+            </li>
+             <li class="menu-item" id="menu-ajustes">
+                <div class="menu-parent"><span class="icon"><i class="fas fa-tools"></i></span> Adjustments</div>
+                <ul class="submenu">
+                    <li><a data-tela="ajustesTransferencia">Custody Transfer</a></li>
+                    <li><a data-tela="eventosAtivos">Asset Events</a></li>
+                    <li><a data-tela="eventosCorporativos">Split/Consolidation</a></li>
+                    <li><a data-tela="ajustePM">Avg Price Adjustment</a></li>
+                </ul>
+            </li>
+            <li class="menu-item config-item"><a data-tela="configuracoes"><span class="icon"><i class="fas fa-cog"></i></span> Settings</a></li>
+            <div id="user-info" style="display: none;">
+                <span id="user-email"></span>
+                <button id="btn-logout" class="btn btn-danger btn-sm">Logout</button>
+            </div>
+        </ul>
+        <div class="sidebar-footer">
+            <div class="footer-info" id="backup-info">
+                <span>Last backup: Never</span>
+            </div>
+            <div class="footer-info" id="market-data-info">
+                <span>Quotes: Never updated.</span>
+            </div>
+        </div>
+    </nav>
+    <main class="main-content">
+        <div id="tela-caixa-global" style="display: none;">
+            <div class="page-header">
+                <h1 class="titulo-com-icone">
+                    All Accounts
+                    <i class="fas fa-calendar-week icone-titulo" id="btn-abrir-calendario-recorrentes-caixa" title="View Recurring Calendar"></i>
+                    <i class="fas fa-chart-area icone-titulo" id="btn-abrir-projecao-caixa" title="View Balance Projection"></i>
+                </h1>
+                <div class="page-header-filters">
+                    <div class="form-group">
+                        <label for="filtro-caixa-data-inicio">Statement Start</label>
+                        <input type="date" id="filtro-caixa-data-inicio">
+                    </div>
+                    <div class="form-group">
+                        <label for="filtro-caixa-data-fim">Statement End</label>
+                        <input type="date" id="filtro-caixa-data-fim">
+                    </div>
+                     <button class="btn btn-primary" id="btn-nova-transacao-universal">
+                        <i class="fas fa-plus"></i> New Transaction
+                    </button>
+                    <button class="btn btn-success" id="btn-adicionar-conta-universal" style="margin-left: 15px;">
+                        <i class="fas fa-plus"></i> Add Account
+                    </button>
+                    <button class="btn btn-secondary" id="btn-backup-caixa">
+                        <i class="fas fa-save"></i> Backup
+                    </button>
+                </div>
+                <div class="filtros-container">
+                    </div>
+            </div>
+            <div id="container-caixa-global">
+                </div>
+        </div>
+        <div id="tela-calendario-geral" style="display: none;">
+            <div class="page-header">
+                <h1 id="titulo-calendario-geral">General Income Calendar</h1>
+                <div class="page-header-filters">
+                    <div class="form-group">
+                        <label for="calendario-geral-filtro-corretora">Filter by Broker</label>
+                        <select id="calendario-geral-filtro-corretora" class="broker-filter">
+                            </select>
+                    </div>
+                </div>
+            </div>
+            <div id="container-calendario-geral">
+                </div>
+        </div>
+        <div id="tela-negociar" style="display: none;">
+            <div class="page-header">
+                <h1>Trading Scenario Analysis</h1>
+                <div class="page-header-actions">
+                    <i class="fas fa-undo acao-btn" id="btn-reset-simulacao" title="Reset simulation"></i>
+                    <i class="fas fa-eye acao-btn" id="btn-visualizar-simulacao" title="View order summary"></i>
+                    <i class="fas fa-file-invoice-dollar acao-btn" id="btn-criar-nota-simulacao" title="Create Trading Note from Simulation"></i>
+                </div>
+                </div>
+                <div class="container aporte-panel">
+                    <div class="form-group aporte-input-group">
+                        <label for="negociar-aporte-valor">Contribution Value (£):</label>
+                        <input type="text" id="negociar-aporte-valor" placeholder="Ex: 5,000.00">
+                    </div>
+                    <div class="aporte-summary">
+                        <div class="summary-data-point">
+                            <label>Total REIT Buys:</label>
+                            <span id="negociar-total-compras-fiis">£ 0.00</span>
+                        </div>
+                        <div class="summary-data-point">
+                            <label>Total Share Buys:</label>
+                            <span id="negociar-total-compras-acoes">£ 0.00</span>
+                        </div>
+                        <div class="summary-data-point total">
+                            <label>Available Balance:</label>
+                            <span id="negociar-saldo-disponivel">£ 0.00</span>
+                        </div>
+                    </div>
+                </div>
+        
+            <div class="container trade-section">
+                <h2>Real Estate Investment Trusts (REITs)</h2>
+                <div class="table-responsive">
+                    <table class="trade-table">
+                        <thead>
+                            <tr>
+                                <th rowspan="2">Asset</th>
+                                <th rowspan="2" class="numero">Avg Price</th>
+                                <th rowspan="2" class="numero">Curr. Price</th>
+                                <th rowspan="2" class="percentual col-variacao">Var. %</th>
+                                <th colspan="2" class="group-header group-header-centered">P/BV</th>
+                                <th rowspan="2" class="percentual">Proj. Yield</th> <th rowspan="2" class="numero">Pos. (Qty)</th>
+                                <th rowspan="2" class="numero">Goal (Qty)</th>
+                                <th rowspan="2" class="numero">Diff</th>
+                                <th colspan="4" class="group-header group-header-centered">Simulate Buy</th>
+                                <th colspan="2" class="group-header group-header-centered">Income Proj.</th>
+                            </tr>
+                            <tr>
+                                <th class="numero">Cost</th>
+                                <th class="numero">Market</th>
+                                <th class="numero">Qty</th>
+                                <th class="numero">Price (£)</th>
+                                <th class="numero">Total (£)</th>
+                                <th class="numero">Final Pos.</th>
+                                <th class="numero">Current</th>
+                                <th class="numero">Post-Buy</th>
+                            </tr>
+                        </thead>
+                        <tbody id="negociar-fiis-tbody">
+                            </tbody>
+                            <tfoot id="negociar-fiis-tfoot">
+                                <tr>
+                                    <td colspan="14" style="text-align: right;"><strong>MONTHLY INCOME TOTALS (REITs):</strong></td>
+                                    <td class="numero" id="total-rend-atual-fiis">£ 0.00</td>
+                                    <td class="numero" id="total-rend-pos-compra-fiis">£ 0.00</td>
+                                </tr>
+                                <tr>
+                                    <td colspan="14" style="text-align: right;"><strong>Income Increase:</strong></td>
+                                    <td colspan="2" class="numero" id="diff-rend-fiis">£ 0.00</td>
+                                </tr>
+                            </tfoot>
+                    </table>
+                </div>
+            </div>
+        
+            <div class="container trade-section">
+                <h2>Shares</h2>
+                <p class="info-nota-calculo">Note: Projected Yield for shares is based on the last 5 years' dividend history.</p>
+                <div class="table-responsive">
+                    <table class="trade-table">
+                        <thead>
+                            <tr>
+                                <th rowspan="2">Asset</th>
+                                <th rowspan="2" class="numero">Avg Price</th>
+                                <th rowspan="2" class="numero">Curr. Price</th>
+                                <th rowspan="2" class="numero">Var.%</th>
+                                <th rowspan="2" class="col-price-range">Price Range (52w)</th>
+                                <th colspan="2" class="group-header group-header-centered">Ceiling Price</th>
+                                <th rowspan="2" class="numero">P/E</th>
+                                <th rowspan="2" class="numero">Payout</th>
+                                <th rowspan="2" class="percentual">Proj. Yield</th> <th rowspan="2" class="numero">Pos. (Qty)</th>
+                                <th rowspan="2" class="numero">Goal (Qty)</th>
+                                <th rowspan="2" class="numero">Adj. (Qty)</th>
+                                <th colspan="4" class="group-header group-header-centered">Simulate Buy</th>
+                                <th colspan="2" class="group-header group-header-centered">Income Proj.</th>
+                            </tr>
+                            <tr>
+                                <th class="numero">Bazin</th>
+                                <th class="numero">Graham</th>
+                                <th class="numero">Qty</th>
+                                <th class="numero">Price (£)</th>
+                                <th class="numero">Total (£)</th>
+                                <th class="numero">Final Pos.</th>
+                                <th class="numero">Current</th>
+                                <th class="numero">Post-Buy</th>
+                            </tr>
+                        </thead>
+                        <tbody id="negociar-acoes-tbody">
+                            </tbody>
+                            <tfoot id="negociar-acoes-tfoot">
+                                <tr>
+                                    <td colspan="17" style="text-align: right;"><strong>MONTHLY INCOME TOTALS (Shares):</strong></td>
+                                    <td class="numero" id="total-rend-atual-acoes">£ 0.00</td>
+                                    <td class="numero" id="total-rend-pos-compra-acoes">£ 0.00</td>
+                                </tr>
+                                <tr>
+                                    <td colspan="17" style="text-align: right;"><strong>Income Increase:</strong></td>
+                                    <td colspan="2" class="numero" id="diff-rend-acoes">£ 0.00</td>
+                                </tr>
+                            </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div id="tela-calendario-acoes" style="display: none;">
+            <div class="page-header">
+                <h1>Share Income Calendar</h1>
+                <div class="page-subheader" id="seletor-vista-calendario-acoes">
+                    <h2 id="subtitulo-datacom" class="subtitulo-calendario ativo" data-vista="dataCom">Ex-Date</h2>
+                    <h2 id="subtitulo-datapagamento" class="subtitulo-calendario" data-vista="dataPagamento">Pay Date</h2>
+                </div>
+            </div>
+            <div class="container" id="calendario-acoes-container">
+                </div>
+        </div>
+        <div id="tela-eventos-ativos" style="display: none;">
+            <div class="page-header">
+                <h1>Asset Events (Non-trading entries/exits)</h1>
+                <div>
+                    <button class="btn btn-primary" id="btn-novo-evento-ativo">Register New Event</button>
+                </div>
+            </div>
+            <div class="container">
+                <p>Use this section to record entries (e.g., bonuses, inheritance, received donations) or exits (e.g., donations given) of assets that do not involve a market buy or sell operation.</p>
+            </div>
+            <div class="container" id="lista-de-eventos-ativos">
+                </div>
+        </div>
+        <div id="tela-historico-snapshots" style="display: none;">
+            <div class="page-header">
+                <h1>Portfolio Snapshot History</h1>
+                <div id="snapshot-currency-filter" class="page-header-filters">
+                    <form class="radio-group" style="background-color: transparent; border: none; padding: 0;">
+                        <label>Display in:</label>
+                        <input type="radio" id="snap-brl" name="snapshot-currency" value="BRL" checked>
+                        <label for="snap-brl">BRL</label>
+                        <input type="radio" id="snap-gbp" name="snapshot-currency" value="GBP">
+                        <label for="snap-gbp">GBP</label>
+                        <input type="radio" id="snap-eur" name="snapshot-currency" value="EUR">
+                        <label for="snap-eur">EUR</label>
+                        <input type="radio" id="snap-usd" name="snapshot-currency" value="USD">
+                        <label for="snap-usd">USD</label>
+                    </form>
+                </div>
+            </div>
+            <div class="container" id="container-historico-snapshots">
+                </div>
+        </div>
+        <div id="tela-posicao-corretora" style="display: none;">
+            <div class="page-header">
+                <h1>Consolidated Position by Financial Institution</h1>
+            </div>
+            <div id="container-posicao-por-corretora">
+                </div>
+        </div>
+        <div id="tela-consulta-balanceamento" style="display: none;">
+            <div class="page-header">
+                <h1>Action Plan & Rebalancing</h1>
+                <div> <i class="fas fa-print fa-lg acao-btn" id="btn-imprimir-balanceamento" title="Print Action Plan" style="margin-right: 20px;"></i>
+                    <button class="btn btn-success" id="btn-levar-plano-para-negociar" title="Transfers buy/sell suggestions to the simulation screen">
+                        <i class="fas fa-arrow-right"></i> Simulate this Plan
+                    </button>
+                </div>
+            </div>
+            <div id="container-alerta-concentracao" class="container" style="display: none; padding: 10px;">
+                </div>
+            <div id="container-consulta-balanceamento">
+                </div>
+        </div>
+        <div id="tela-eventos-corporativos" style="display: none;">
+            <div class="page-header">
+                <h1>Position Adjustments (Split/Consolidation)</h1>
+                <div>
+                    <button class="btn btn-primary" id="btn-novo-evento-corporativo">Register New Event</button>
+                </div>
+            </div>
+             <div class="container">
+                <p>Use this section to record stock splits or consolidations (reverse splits). These events change the quantity of assets and the average price, but not the total amount invested.</p>
+            </div>
+            <div class="container" id="lista-de-eventos-corporativos">
+                </div>
+        </div>
+        <div id="tela-metas" style="display: none;">
+            <div class="page-header">
+                <h1>Goals Panel</h1>
+                <button class="btn btn-primary" onclick="abrirModalCadastroMeta()"><i class="fas fa-plus"></i> Add New Goal</button>
+            </div>
+            <div id="container-metas" class="metas-grid">
+                </div>
+        </div>
+        <div id="tela-dashboard" style="display: none;">
+            <div class="page-header">
+                <h1 class="titulo-com-icone">
+                    <span>Financial Dashboard</span>
+                </h1>
+                <div class="page-header-filters">
+                    <button class="btn btn-danger" id="btn-sync-needed-alert" title="Sync recommended! Click to go to tool." style="display: none;">
+                        <i class="fas fa-exclamation"></i> Sync
+                    </button>
+                    <button class="btn btn-success" id="btn-atualizar-cotacoes-api"><i class="fas fa-sync-alt"></i> Update Quotes (Auto)</button>
+                    <button class="btn btn-primary" id="btn-salvar-snapshot-carteira" title="Saves the current investment portfolio value for the evolution chart"><i class="fas fa-camera"></i> Save Portfolio Snapshot</button>
+                    <button class="btn btn-purple" id="btn-dashboard-backup"><i class="fas fa-save"></i> Backup</button>
+                    <button class="btn btn-purple btn-restaurar-backup"><i class="fas fa-upload"></i> Restore Backup</button>
+                </div>
+            </div>
+            <div class="dashboard-alert" id="dashboard-alerta-rebalanceamento" style="display: none;">
+                <i class="fas fa-balance-scale-right"></i>
+                <span><strong>Rebalancing Opportunity!</strong> There are assets in your portfolio ready to be sold at a profit to rebalance your allocation.</span>
+                <a href="#" data-tela="consultaBalanceamento" class="link-alerta">Check now</a>
+            </div>
+            <div id="dashboard-ticker-tape" class="ticker-tape-container">
+                <div class="ticker-tape-content">
+                    </div>
+            </div>
+            <div id="dashboard-summary-cards" class="summary-cards">
+                <div class="summary-card">
+                    <div class="card-title">
+                        <span>Total Net Worth</span>
+                    </div>
+                    <div class="card-value" id="db-patrimonio-total">£ 0.00</div>
+                </div>
+                <div id="card-investimentos" class="summary-card">
+                    <div class="card-title">Investment Portfolio</div>
+                    <div class="card-value" id="db-carteira-total">£ 0.00</div>
+                </div>
+                <div id="card-contas" class="summary-card">
+                    <div class="card-title">Account Balance</div>
+                    <div class="card-value" id="db-contas-total">£ 0.00</div>
+                </div>
+                <div id="card-moedas" class="summary-card">
+                    <div class="card-title">Foreign Currencies</div>
+                    <div class="card-value" id="db-moedas-total">£ 0.00</div>
+                </div>
+                <div id="card-proventos" class="summary-card">
+                    <div class="card-title">Provisioned Income</div>
+                    <div class="card-value" id="db-proventos-provisionados-total">£ 0.00</div>
+                </div>
+            </div>
+            <div class="container" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 30px;">
+                <div class="grafico-container" style="flex: 1; min-width: 400px;">
+                    <canvas id="grafico-alocacao-canvas"></canvas>
+                </div>  
+
+                <div style="flex: 1.5; min-width: 500px;">
+                    <h3>Portfolio Summary & Allocation</h3>
+                    <h4 class="subtitulo-dashboard" id="data-inicio-carteira"></h4>
+                    <div id="dashboard-table-container"></div>
+                    
+                    <div id="dashboard-alocacao-panel" style="margin-top: 20px;">
+                        <h4>Define Ideal Allocation</h4>
+                        <div id="dashboard-alocacao-container" class="dashboard-alocacao-grid"></div>
+                        <div id="dashboard-alocacao-total" class="dashboard-alocacao-total"></div>
+                    </div>
+                </div>
+            </div>
+
+<div id="dashboard-metas-summary-container" class="container" style="display: none;">
+                </div>
+            <div class="container">
+                <h3>Investment Portfolio Evolution</h3>
+                <div class="grafico-barras-container">
+                    <canvas id="grafico-carteira-canvas"></canvas>
+                </div>
+            </div>
+            <div class="container">
+                <h3>Income Evolution (Variable Income)</h3>
+                <div class="grafico-barras-container">
+                    <canvas id="grafico-proventos-canvas"></canvas>
+                </div>
+            </div>
+            <div class="container">
+                <div class="grafico-header-com-toggle">
+                    <h3>Contributions vs. Generated Income</h3>
+                    <div class="chart-toggle-container" id="toggle-aportes-grafico">
+                        <button class="chart-toggle-btn ativo" data-tipo="barras">
+                            <i class="fas fa-chart-bar"></i> Composition
+                        </button>
+                        <button class="chart-toggle-btn" data-tipo="linhas">
+                            <i class="fas fa-chart-line"></i> Turning Point
+                        </button>
+                    </div>
+                </div>
+                <div class="grafico-barras-container">
+                    <canvas id="grafico-aportes-proventos-canvas"></canvas>
+                </div>
+            </div>
+            <div class="container">
+                <h3>Real Profitability Analysis (Variable Income)</h3>
+                <div class="chart-period-controls" style="display: flex; justify-content: left; gap: 5px; margin-bottom: 10px;">
+                    <input type="radio" id="dash-periodo-1m" name="periodo-desempenho-dash" value="1M">
+                    <label for="dash-periodo-1m" class="chart-period-btn">1M</label>
+                
+                    <input type="radio" id="dash-periodo-ytd" name="periodo-desempenho-dash" value="YTD">
+                    <label for="dash-periodo-ytd" class="chart-period-btn">YTD</label>
+                
+                    <input type="radio" id="dash-periodo-1a" name="periodo-desempenho-dash" value="1A">
+                    <label for="dash-periodo-1a" class="chart-period-btn">1Y</label>
+                
+                    <input type="radio" id="dash-periodo-5a" name="periodo-desempenho-dash" value="5A">
+                    <label for="dash-periodo-5a" class="chart-period-btn">5Y</label>
+                </div>
+                <div class="grafico-barras-container">
+                    <canvas id="grafico-desempenho-canvas"></canvas>
+                </div>
+            </div>
+            <div class="container" id="painel-comparativo-container" style="display: none;">
+                </div>
+            </div>
+            <div id="tela-cadastro-rf" style="display: none;">
+            <div class="page-header">
+                <h1>Fixed Income Registration</h1>
+                <div>
+                    <button class="btn btn-primary btn-abrir-modal-rf" id="btn-cadastrar-novo-ativo-rf-cadastro">New Investment</button>
+                    <button class="btn btn-danger" id="btn-excluir-todos-ativos-rf">Delete All</button>
+                </div>
+            </div>
+            <div class="container" id="lista-de-ativos-rf">
+                </div>
+        </div>
+        <div id="tela-renda-fixa" style="display: none;">
+            <div class="page-header">
+                <h1>My Fixed Income Position</h1>
+                <div class="page-header-filters">
+                    <button class="btn btn-primary btn-abrir-modal-rf" id="btn-cadastrar-novo-ativo-rf">New Investment</button>
+                    <div class="form-group">
+                        <label>Position on</label><input type="date" class="date-filter" data-tipo-ativo="RendaFixa">
+                    </div>
+                </div>
+            </div>
+            <div class="page-header-summary" id="summary-rf">
+                 </div>
+            <div class="container" id="posicao-rf-container">
+                 </div>
+        </div>
+        <div id="tela-historico-movimentacao" style="display: none;">
+            <div class="page-header">
+                <h1>Movement History by Asset</h1>
+            </div>
+            <div class="container">
+                <form id="form-busca-historico" class="form-row" style="align-items: flex-end;">
+                    <div class="form-group" style="flex-grow: 3;">
+                        <label for="select-ativo-historico">Select Asset</label>
+                        <select id="select-ativo-historico" required>
+                            <option value="">Select an asset...</option>
+                        </select>
+                    </div>
+                </form>
+                <div id="container-tabela-movimentacoes" style="margin-top: 20px;">
+                    </div>
+            </div>
+        </div>
+        <div id="tela-crescimento-patrimonial" style="display: none;">
+            <div class="page-header">
+                <h1>Wealth Growth by Value/Time</h1>
+            </div>
+            <div class="container">
+                <p>This tool analyzes your portfolio's snapshot history. Choose the desired type of analysis.</p>
+                <form id="form-crescimento-patrimonial" class="form-row" style="align-items: flex-end; margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px;">
+                    <div class="form-group" style="flex-grow: 1;">
+                        <label for="crescimento-tipo-saldo">Balance Type</label>
+                        <select id="crescimento-tipo-saldo" required>
+                            <option value="patrimonioTotal">Total Net Worth</option>
+                            <option value="valorTotalInvestimentos">Total Invested</option>
+                            <option value="FIIs">REITs Only</option>
+                            <option value="Ações">Shares Only</option>
+                            <option value="ETF">ETFs Only</option>
+                            <option value="Renda Fixa">Fixed Income Only</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex-grow: 1;">
+                        <label for="crescimento-tipo-analise">Analysis Type</label>
+                        <select id="crescimento-tipo-analise" required>
+                            <option value="valor">By Value (Growth Milestones)</option>
+                            <option value="periodo">By Period (Performance)</option>
+                        </select>
+                    </div>
+        
+                    <div id="container-analise-valor" class="form-group">
+                        <label for="crescimento-intervalo-valor">Growth Interval (£)</label>
+                        <input type="text" id="crescimento-intervalo-valor" placeholder="Ex: 10000">
+                    </div>
+        
+                    <div id="container-analise-periodo" class="form-group" style="display: none; flex-grow: 2;">
+                        <div class="form-row" style="margin-bottom: 0; width: 100%;">
+                            <div class="form-group">
+                                <label for="crescimento-periodo">Period</label>
+                                <select id="crescimento-periodo">
+                                    <option value="semanal">Weekly</option>
+                                    <option value="mensal">Monthly</option>
+                                    <option value="trimestral">Quarterly</option>
+                                    <option value="semestral">Semiannual</option>
+                                    <option value="anual">Annual</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="crescimento-data-inicio">From</label>
+                                <input type="date" id="crescimento-data-inicio">
+                            </div>
+                        </div>
+                    </div>
+        
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">Analyze Growth</button>
+                    </div>
+                </form>
+            </div>
+            <div class="container" id="container-resultado-crescimento" style="display: none;">
+            </div>
+        </div>
+        <div id="tela-posicoes-zeradas" style="display: none;">
+            <div class="page-header">
+                <h1>Zeroed Positions Query</h1>
+            </div>
+            <div class="container">
+                <p>Below are listed the assets that were once part of your portfolio but currently have a zero position.</p>
+                <div id="container-posicoes-zeradas"></div>
+            </div>
+        </div>
+        <div id="tela-calculadora-ir" style="display: none;">
+            <div class="page-header">
+                <h1>Income Tax Calculator (Brazil Rules)</h1>
+                <div class="page-header-filters">
+                    <div class="form-group">
+                        <label for="ir-filtro-ano">Year</label>
+                        <select id="ir-filtro-ano"></select>
+                    </div>
+                    <i class="fas fa-print fa-lg acao-btn icone-titulo" id="btn-imprimir-ir" title="Print Tax Report"></i>
+                </div>
+            </div>
+            <div class="container">
+                <h2>Tax Due in Year: <span id="ir-total-anual">£ 0.00</span></h2>
+            </div>
+            <div class="container">
+                <h3>REITs/Agro-REITs</h3>
+                <div id="ir-tabela-fiis"></div>
+            </div>
+            <div class="container">
+                <h3>General (Shares, ETFs, etc.) - SWING TRADE</h3>
+                <p style="font-size: 0.9em; color: #555; margin-bottom: 15px;">Sales of Shares (ON/PN) up to <strong id="ir-limite-isencao-texto">£ 20,000.00</strong> per month are exempt. Profits from Unit Shares and ETFs are always taxable. Losses from any of these can offset taxable profits from any other within this group.</p>
+                <div id="ir-tabela-geral-rv"></div>
+            </div>
+             <div class="container">
+                <h3>DAY TRADE OPERATIONS</h3>
+                <div id="ir-tabela-daytrade"></div>
+            </div>
+        </div>
+        <div id="tela-feriados" style="display: none;">
+            <div class="page-header">
+                <h1>Holiday Registration</h1>
+                <div>
+                    <button class="btn btn-primary" id="btn-novo-feriado" style="margin-right: 10px;">Register New Holiday</button>
+                    <button class="btn btn-danger" id="btn-excluir-todos-feriados">Delete All</button>
+                </div>
+            </div>
+            <div class="container" id="lista-de-feriados"></div>
+        </div>
+        <div id="tela-cadastro-contas" style="display: none;">
+            <div class="page-header">
+                <h1>Account Registration</h1>
+                <div>
+                    <button class="btn btn-primary" id="btn-nova-conta" style="margin-right: 10px;">Register New Account</button>
+                </div>
+            </div>
+            <div class="container" id="lista-de-contas-cadastradas"></div>
+        </div>
+        <div id="tela-lista-notas" style="display: none;">
+            <div class="page-header">
+                <h1>Recorded Trading Notes</h1>
+                <div class="page-header-filters">
+                    <div class="form-group">
+                        <label for="filtro-nota-ativo">Filter by Asset</label>
+                        <input type="text" id="filtro-nota-ativo" placeholder="Enter ticker..." class="ticker-input">
+                    </div>
+                </div>
+                <div>
+                    <button class="btn btn-primary" id="btn-novo-lancamento">New Entry</button>
+                    <input type="file" id="input-arquivo-notas" accept=".csv" style="display: none;">
+                    <button class="btn btn-secondary" id="btn-importar-notas-csv"><i class="fas fa-file-csv"></i> Import Notes (CSV)</button>
+                    <button class="btn btn-danger" id="btn-excluir-todas-notas">Delete All</button>
+                </div>
+            </div>
+            <div class="container" id="lista-de-notas-salvas"></div>
+        </div>
+        <div id="tela-importacao-notas" style="display: none;">
+            <div class="page-header">
+                <h1>Imported Notes Review</h1>
+                <p>Check the imported data. You can make adjustments before saving permanently.</p>
+            </div>
+            <div id="container-revisao-notas"></div>
+            <div class="form-actions" style="padding: 20px; border-top: 1px solid #ccc; margin-top: 20px;">
+                <button type="button" class="btn btn-secondary" id="btn-cancelar-importacao-notas">Cancel Import</button>
+                <button type="button" class="btn btn-success" id="btn-salvar-notas-importadas">Save All Imported Notes</button>
+            </div>
+        </div>
+        <div id="tela-lancamento-nota" style="display: none;">
+            <h1>Trading Note Entry</h1>
+            <div class="container">
+                <form id="form-nota-geral"><div class="form-grid"><div class="form-group"><label for="nota-corretora">Broker</label><select id="nota-corretora" required></select></div><div class="form-group"><label for="nota-numero">Note Number</label><input type="text" id="nota-numero" required></div><div class="form-group"><label for="nota-data">Note Date</label><input type="date" id="nota-data" required></div><div class="form-group"><label for="nota-custos">Total Costs</label><input type="text" id="nota-custos" placeholder="0.00"></div><div class="form-group"><label for="nota-irrf">WHT (IRRF)</label><input type="text" id="nota-irrf" placeholder="0.00"></div></div></form>
+                <form id="form-add-operacao" class="form-operacao"><h3>Add Operation</h3><div class="form-grid"><div class="form-group"><label for="op-ativo">Asset</label><input type="text" id="op-ativo" placeholder="ex: LLOY" required class="ticker-input"></div><div class="form-group"><label for="op-tipo">Operation</label><select id="op-tipo"><option value="compra">Buy</option><option value="venda">Sell</option></select></div><div class="form-group"><label for="op-quantidade">Quantity</label><input type="number" id="op-quantidade" step="1" required></div><div class="form-group"><label for="op-valor">Total Value (£)</label><input type="text" id="op-valor" placeholder="0.00" required></div><div class="form-group" style="justify-content: flex-end;"><button type="submit" class="btn btn-primary">Add</button></div></div></form>
+            </div>
+            <div class="container">
+                <h2>Operations in Note</h2>
+                <table><thead><tr><th>Asset</th><th>Op</th><th class="numero">Qty</th><th class="numero">Unit Price</th><th class="numero">Total Value</th><th class="numero">Price w/ Costs</th><th class="controles-col">Actions</th></tr></thead><tbody id="tabela-operacoes-body"></tbody></table>
+                 <div class="subtotal-nota">
+                    <h3>Note Summary</h3>
+                    <div class="subtotal-grid">
+                        <div class="subtotal-item"><span>Total Buys:</span><span id="subtotal-compras">£ 0.00</span></div>
+                        <div class="subtotal-item"><span>Total Sells:</span><span id="subtotal-vendas">£ 0.00</span></div>
+                        <div class="subtotal-item"><span>Costs + WHT:</span><span id="subtotal-custos">£ 0.00</span></div>
+                        <div class="subtotal-item valor-liquido"><span>Net Value:</span><span id="subtotal-liquido">0.00C</span></div>
+                        <div class="subtotal-item"><span>Settlement Date:</span><span id="subtotal-liquidacao">--/--/----</span></div>
+                    </div>
+                </div>
+                <div class="form-actions"><button type="button" class="btn btn-secondary" id="btn-cancelar-nota">Cancel</button><button type="button" class="btn btn-success" id="btn-salvar-nota">Save Note</button></div>
+            </div>
+        </div>
+        <div id="tela-cadastro-ativos" style="display: none;">
+            <div class="page-header">
+                <h1>Asset Registration (Variable Income)</h1>
+                <div id="botoes-ativos-padrao">
+                    <button class="btn btn-secondary" id="btn-buscar-ativos-nao-cadastrados">Analyze Registers</button>
+                    <button class="btn btn-primary" id="btn-cadastrar-novo-ativo">Register New Asset</button>
+                    <button class="btn btn-secondary" id="btn-edicao-rapida-ativos">Quick Edit</button>
+                    <button class="btn btn-danger" id="btn-excluir-todos-ativos">Delete All</button>
+                </div>
+                <div id="botoes-ativos-edicao" style="display: none;">
+                    <button class="btn btn-success" id="btn-salvar-edicao-rapida-ativos">Save Changes</button>
+                    <button class="btn btn-secondary" id="btn-cancelar-edicao-rapida-ativos">Cancel</button>
+                </div>
+            </div>
+            <div class="container" id="lista-de-ativos-cadastrados"></div>
+        </div>
+        <div id="tela-posicao-inicial" style="display: none;">
+             <div class="page-header">
+                <h1>Initial Variable Income Position</h1>
+                <div>
+                    <button class="btn btn-primary" id="btn-adicionar-posicao-massa">Add Bulk Position</button>
+                    <button class="btn btn-secondary" id="btn-add-historico-ativo">Add History (Manual)</button>
+                    <input type="file" id="input-arquivo-historico" accept=".csv" style="display: none;">
+                    <button class="btn btn-secondary" id="btn-importar-historico-csv"><i class="fas fa-file-csv"></i> Import History (CSV)</button>
+                    <button class="btn btn-danger" id="btn-excluir-todas-posicoes">Delete All</button>
+                </div>
+            </div>
+            <div class="container" id="lista-de-posicoes-iniciais"></div>
+            <div id="container-adicionar-historico" class="container" style="display: none;">
+                <h2>Add Asset History (Manual)</h2>
+                <form id="form-buscar-ativo-historico" class="form-row" style="align-items: flex-end;">
+                    <div class="form-group">
+                        <label for="historico-ativo-ticker">Asset</label>
+                        <input type="text" id="historico-ativo-ticker" class="ticker-input" required>
+                    </div>
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">Search Asset</button>
+                    </div>
+                </form>
+                <div id="container-tabela-historico" style="display: none;">
+                    <h3>Entries for asset: <span id="historico-ativo-selecionado"></span></h3>
+                    <form id="form-salvar-historico">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Transaction</th>
+                                    <th class="numero">Quantity</th>
+                                    <th>Broker</th>
+                                    <th class="numero">Resulting Avg Price</th>
+                                    <th class="controles-col">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-historico-body">
+                            </tbody>
+                        </table>
+                        <div class="form-actions" style="justify-content: space-between; margin-top: 20px;">
+                             <button type="button" class="btn btn-primary" id="btn-add-linha-historico"><i class="fas fa-plus"></i> Add Row</button>
+                             <div>
+                                <button type="button" class="btn btn-secondary" id="btn-cancelar-historico">Cancel</button>
+                                <button type="submit" class="btn btn-success">Save History</button>
+                             </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div id="tela-posicao-inicial-massa" style="display: none;">
+            <div class="page-header">
+                <h1>Initial Position Bulk Entry</h1>
+                <div>
+                    <button type="button" class="btn btn-secondary" id="btn-voltar-lista-posicao">Back to List</button>
+                    <button type="button" class="btn btn-success" id="btn-salvar-posicao-massa">Save Positions</button>
+                </div>
+            </div>
+
+            <div class="container">
+                <p>Fill in the data below. Each line represents the position of an asset at a broker. Rows with empty fields or unregistered tickers will be ignored.</p>
+                <form id="form-posicao-massa">
+                    <div style="overflow-x: auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="width: 15%;">Asset (Ticker)</th>
+                                    <th style="width: 15%;">Pos. Date</th>
+                                    <th style="width: 25%;">Average Price (£)</th>
+                                    <th style="width: 15%;">Quantity</th>
+                                    <th style="width: 25%;">Broker</th>
+                                    <th style="width: 5%;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-posicao-massa-body">
+                                </tbody>
+                        </table>
+                    </div>
+                    <div class="form-actions" style="justify-content: flex-start; margin-top: 20px;">
+                        <button type="button" class="btn btn-primary" id="btn-add-5-linhas-posicao">+ Add 5 Rows</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div id="tela-proventos-massa" style="display: none;">
+            <div class="page-header">
+                <h1>Bulk Income Entry</h1>
+                <div>
+                    <button type="button" class="btn btn-secondary" id="btn-voltar-lista-proventos">Back to List</button>
+                    <button type="button" class="btn btn-success" id="btn-salvar-proventos-massa">Save All Income</button>
+                </div>
+            </div>
+        
+            <div class="container">
+                <p>Fill in the data below. Lines with empty required fields or unregistered tickers will be ignored. The system will automatically calculate the total value and YOC based on your position on the "Ex-Date".</p>
+                <form id="form-proventos-massa">
+                    <div style="overflow-x: auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="width: 12%;">Asset (Ticker)</th>
+                                    <th style="width: 15%;">Type</th>
+                                    <th style="width: 15%;">Ex-Date</th>
+                                    <th style="width: 15%;">Pay Date</th>
+                                    <th style="width: 20%;" class="numero">Gross Unit Value (£)</th>
+                                    <th style="width: 15%;" class="numero">Tax (%)</th>
+                                    <th style="width: 8%;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-proventos-massa-body">
+                                </tbody>
+                        </table>
+                    </div>
+                    <div class="form-actions" style="justify-content: flex-start; margin-top: 20px;">
+                        <button type="button" class="btn btn-primary" id="btn-add-5-linhas-provento">+ Add 5 Rows</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div id="tela-importacao-historico" style="display: none;">
+            <div class="page-header">
+                <h1>Imported History Review</h1>
+                <p>Verify the imported data. You can make adjustments before saving permanently.</p>
+            </div>
+            <div id="container-revisao-historico"></div>
+            <div class="form-actions" style="padding: 20px; border-top: 1px solid #ccc; margin-top: 20px;">
+                <button type="button" class="btn btn-secondary" id="btn-cancelar-importacao-historico">Cancel Import</button>
+                <button type="button" class="btn btn-success" id="btn-salvar-historico-importado">Save Imported History</button>
+            </div>
+        </div>
+        <div id="tela-configuracoes" style="display: none;">
+            <div class="page-header"><h1>Settings</h1></div>
+            <div class="container">
+                <h2>User Data</h2>
+                <div class="form-group">
+                    <label for="config-user-name">Your Name (for export identification)</label>
+                    <input type="text" id="config-user-name" placeholder="Enter your name or nickname">
+                </div>
+            </div>
+            <div class="container">
+                <h2>General Parameters</h2>
+                <div class="form-group">
+                    <label for="config-salario-minimo">Minimum Wage Value (£/R$)</label>
+                    <input type="text" id="config-salario-minimo" placeholder="Ex: 1,512.00">
+                </div>
+            </div>
+            <div class="container">
+                <h2>Backup & Restore / Export & Import</h2>
+                <p style="margin-bottom: 20px;">
+                    <b>Backup:</b> Save or restore ALL application data (including notes, income, transactions, etc.).<br>
+                    <b>Export:</b> Save or import only REGISTRY DATA (Assets, Accounts, and Holidays) in a CSV file.
+                </p>
+                <div class="form-actions" style="justify-content: flex-start; gap: 15px;">
+                    <button class="btn btn-primary" id="btn-backup">Full Backup (.json)</button>
+                    <button class="btn" id="btn-restaurar">Restore Backup (.json)</button>
+                    <button class="btn btn-success" id="btn-exportar-cadastros">Export Registers (.csv)</button>
+                    <button class="btn btn-secondary" id="btn-importar-cadastros">Import Registers (.csv)</button>
+                </div>
+            </div>
+            <div class="ajustes-section">
+                <h2>Automation & Quote Import</h2>
+                <p style="margin-bottom: 15px;">Paste here the public link to your Google Sheets spreadsheet (published as CSV). The "Update Quotes" button on the Dashboard will use this link.</p>
+                <div class="form-group" style="flex-direction: row; align-items: center; gap: 10px; margin-bottom: 20px;">
+                    <input type="checkbox" id="config-auto-update-toggle" style="width: auto;">
+                    <label for="config-auto-update-toggle" style="margin: 0;">Enable automatic quote updates every 10 minutes.</label>
+                </div>
+                <div class="form-group">
+                    <label for="config-cotacoes-url">Quotes Spreadsheet URL (Published as CSV)</label>
+                    <div class="form-row" style="align-items: center; margin-bottom: 0;">
+                        <input type="url" id="config-cotacoes-url" placeholder="https://docs.google.com/spreadsheets/d/.../export?format=csv" style="flex-grow: 1;">
+                        <button type="button" class="btn btn-primary" id="btn-testar-salvar-url-cotacoes" style="margin-left: 10px;">Test and Save URL</button>
+                    </div>
+                </div>
+                <hr style="margin: 20px 0;">
+                <p style="margin-bottom: 15px;">For manual update, use the button below to import a CSV file from your computer.</p>
+                <div class="form-actions" style="justify-content: flex-start;">
+                    <button class="btn btn-success" id="btn-baixar-cotacoes-link"><i class="fas fa-download"></i> Download CSV Template</button>
+                    <button class="btn btn-secondary" id="btn-importar-cotacoes-manual-config"><i class="fas fa-file-csv"></i> Import Quotes (Manual CSV)</button>
+                </div>
+            </div>
+            <div class="container">
+                <h2>External Links for Query</h2>
+                <p style="margin-bottom: 20px;">Define the base URL for asset queries. The system will append the ticker to the end of the link (Ex: https://finance.yahoo.com/quote/LLOY.L).</p>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="config-link-acoes">URL for Shares</label>
+                        <input type="url" id="config-link-acoes" placeholder="https://example.com/shares/">
+                    </div>
+                    <div class="form-group">
+                        <label for="config-link-fiis">URL for REITs</label>
+                        <input type="url" id="config-link-fiis" placeholder="https://example.com/reits/">
+                    </div>
+                    <div class="form-group">
+                        <label for="config-link-etfs">URL for ETFs</label>
+                        <input type="url" id="config-link-etfs" placeholder="https://example.com/etfs/">
+                    </div>
+                </div>
+            </div>
+            <div class="container config-section">
+                <h2 id="titulo-parametros-fiscais">Fiscal & Tax Parameters</h2>
+                <p style="margin-bottom: 20px;">Adjust the rates and limits used in system calculations. Default values will be used if none are saved.</p>
+                <form id="form-config-fiscal">
+                    <div id="config-ir-variavel">
+                        <h4>Variable Income</h4>
+                        <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));">
+                            <div class="form-group">
+                                <label for="config-aliquota-swing">Swing Trade Tax Rate (Shares/ETFs) (%)</label>
+                                <input type="text" id="config-aliquota-swing" placeholder="15.00">
+                            </div>
+                            <div class="form-group">
+                                <label for="config-aliquota-daytrade">Day Trade & REITs Tax Rate (%)</label>
+                                <input type="text" id="config-aliquota-daytrade" placeholder="20.00">
+                            </div>
+                            <div class="form-group">
+                                <label for="config-limite-isencao">Share Sale Exemption Limit (£/R$)</label>
+                                <input type="text" id="config-limite-isencao" placeholder="20,000.00">
+                            </div>
+                        </div>
+                    </div>
+                    <div id="config-ir-fixa">
+                        <h4>Fixed Income (Regressive Table)</h4>
+                        <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+                            <div class="form-group"><label>Up to 180 days (%)</label><input type="text" class="config-ir-fixa-faixa" data-faixa="180" placeholder="22.50"></div>
+                            <div class="form-group"><label>181 to 360 days (%)</label><input type="text" class="config-ir-fixa-faixa" data-faixa="360" placeholder="20.00"></div>
+                            <div class="form-group"><label>361 to 720 days (%)</label><input type="text" class="config-ir-fixa-faixa" data-faixa="720" placeholder="17.50"></div>
+                            <div class="form-group"><label>Above 720 days (%)</label><input type="text" class="config-ir-fixa-faixa" data-faixa="9999" placeholder="15.00"></div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="container config-section">
+                <h2>Data Maintenance</h2>
+                <p style="margin-bottom: 20px;">Use this tool for a deep check. It will recalculate all income, sync income and note cash flows, and search for unregistered assets. Use after changing history.</p>
+                <div class="form-actions" style="justify-content: flex-start;">
+                    <button class="btn btn-primary" id="btn-sincronizar-registros">Recalculate and Sync Records</button>
+                </div>
+            </div>
+            <div class="container config-section">
+                <h2>Inconsistency Check</h2>
+                <p style="margin-bottom: 20px;">Use this tool to check for possible entry errors or incomplete registrations that may affect portfolio calculations.</p>
+                <div class="form-actions" style="justify-content: flex-start;">
+                    <button class="btn" id="btn-verificar-inconsistencias">Check Inconsistencies Now</button>
+                </div>
+                <div id="resultados-inconsistencias" style="margin-top: 20px;"></div>
+            </div>
+            <div class="container config-section">
+                <h2>Danger Zone</h2>
+                <p style="margin-bottom: 20px;">Action in this section is irreversible. Be absolutely sure before proceeding.</p>
+                <button class="btn btn-danger" id="btn-apagar-tudo">Wipe All Data</button>
+            </div>
+        </div>
+        <div id="tela-ajustes-transferencia" style="display: none;">
+            <div class="page-header"><h1>Position Adjustments</h1></div>
+            <div class="container">
+                <h2 id="transferencia-form-titulo">Register New Custody Transfer</h2>
+                <p>Use this tool to record the movement of assets between brokers.</p>
+                <form id="form-transferencia-custodia">
+                    <input type="hidden" id="transferencia-id">
+                    <div class="form-row">
+                        <div class="form-group"><label for="transferencia-corretora-origem">Source Broker</label><select id="transferencia-corretora-origem" required><option value="">Select...</option></select></div>
+                        <div class="form-group"><label for="transferencia-corretora-destino">Destination Broker</label><select id="transferencia-corretora-destino" required><option value="">Select...</option></select></div>
+                        <div class="form-group"><label for="transferencia-data">Transfer Date</label><input type="date" id="transferencia-data" required></div>
+                    </div>
+                    <div id="transferencia-ativos-container" style="display: none;">
+                        <h4 style="margin-top: 15px;">Select Assets and Quantities to Transfer</h4>
+                        <div id="transferencia-ativos-disponiveis" style="margin-top: 15px;"></div>
+                        <h4 style="margin-top: 25px;">Select Pending Income to Transfer</h4>
+                        <div id="transferencia-proventos-disponiveis" style="margin-top: 15px;"></div>
+                        <div class="form-actions"><button type="submit" class="btn btn-success">Register Transfer</button></div>
+                    </div>
+                </form>
+            </div>
+            <div class="container" id="lista-de-transferencias-container" style="margin-top: 30px;">
+                <h2>Transfer History</h2>
+                <div id="lista-de-transferencias"></div>
+            </div>
+        </div>
+        <div id="tela-ajuste-pm" style="display: none;">
+            <div class="page-header"><h1>Average Balance Adjustment</h1></div>
+            <div class="container">
+                <h2>Adjust Average Price on a Specific Date</h2>
+                <p>Select the date to load the position, then enter the new average price for the desired assets. This action does not change the asset quantity, only its acquisition cost for future calculations.</p>
+                <form id="form-buscar-posicao-pm">
+                    <div class="form-row" style="align-items: flex-end;">
+                        <div class="form-group"><label for="ajuste-pm-data">Position Date</label><input type="date" id="ajuste-pm-data" required></div>
+                        <div class="form-group"><button type="submit" class="btn btn-primary">Search Positions</button></div>
+                    </div>
+                </form>
+            </div>
+             <div class="container" id="container-ajuste-pm-lista" style="display:none;">
+                <h3>Position on <span id="ajuste-pm-data-selecionada"></span></h3>
+                <form id="form-salvar-ajuste-pm">
+                    <table>
+                        <thead><tr><th>Asset</th><th class="numero">Quantity</th><th class="numero">Current Avg Price</th><th class="numero">New Avg Price</th></tr></thead>
+                        <tbody id="tabela-ajuste-pm"></tbody>
+                    </table>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-success">Save Average Price Adjustments</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div id="tela-proventos" style="display: none;">
+            <div class="page-header">
+                <h1>
+                    Income Entry
+                </h1>
+                <div class="page-header-filters">
+                    <div id="botoes-proventos-padrao">
+                        <button class="btn btn-primary" id="btn-novo-provento">New Entry</button>
+                        <button class="btn btn-secondary" id="btn-adicionar-proventos-massa">Bulk Entry</button>
+                        <button class="btn btn-secondary" id="btn-edicao-rapida-proventos">Quick Edit</button>
+                    </div>
+                     <div id="botoes-proventos-edicao" style="display: none;">
+                        <button class="btn btn-success" id="btn-salvar-edicao-rapida-proventos">Save Changes</button>
+                        <button type="button" class="btn btn-secondary" id="btn-cancelar-edicao-rapida-proventos">Cancel</button>
+                    </div>
+            
+                    <div style="margin-left: 20px; display: flex; align-items: center; gap: 20px;">
+                        <i class="fas fa-file-export fa-lg acao-btn" id="btn-exportar-proventos" title="Export Income (CSV)"></i>
+                        <i class="fas fa-file-upload fa-lg acao-btn" id="btn-importar-proventos" title="Import Income (CSV)"></i>
+                        <i class="fas fa-print fa-lg acao-btn" id="btn-imprimir-proventos" title="Print Filtered Income"></i>
+
+                    </div>
+                </div>
+            </div>
+            <div class="page-header-secondary">
+                 <div class="page-header-filters">
+                    <div class="form-group"><label>From:</label><input type="date" id="provento-filtro-data-de"></div>
+                    <div class="form-group"><label>To:</label><input type="date" id="provento-filtro-data-ate"></div>
+                    <div class="form-group"><label>Filter by Asset</label><input type="text" id="provento-filtro-ativo" placeholder="ex: LLOY"></div>
+                    <div class="form-group"><label>Filter by Type</label><select id="provento-filtro-tipo"><option value="todos">All Types</option><option value="Ação">Shares</option><option value="FII">REITs</option><option value="ETF">ETFs</option></select></div>
+                    <div class="form-group"><label>Filter by Status</label><select id="provento-filtro-status"><option value="todos">All</option><option value="receber">To Receive</option><option value="recebido">Received</option></select></div>
+                    <div class="form-group"><label>Filter by Position</label><select id="provento-filtro-posicao"><option value="todos" selected>All</option><option value="em_carteira">In Portfolio</option><option value="zerados">Zeroed</option></select></div>
+                </div>
+            </div>
+            <div class="container" id="proventos-summary-container">
+                <div id="proventos-summary-ativo-info" style="display: none;">
+                    </div>
+                <h3 id="proventos-summary-titulo">Period Summary</h3>
+                <div class="summary-panel-container">
+                    <div class="summary-monetary-values">
+                        <div class="summary-data-point large">
+                            <label>Total Dividend in Period</label>
+                            <span id="summary-dividendo-total">£ 0.00</span>
+                        </div>
+                        <div class="summary-data-point large">
+                            <label>Annual Projection (Current Pos.)</label>
+                            <span id="summary-projecao-anual">£ 0.00</span>
+                        </div>
+                        <div class="summary-data-point large">
+                            <label>Monthly Average (Current Pos.)</label>
+                            <span id="summary-media-mensal">£ 0.00</span>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="summary-columns-container">
+                        <div class="summary-column">
+                            <h4>Yield on Cost (YOC)</h4>
+                            <div class="summary-data-point">
+                                <label>YOC Annualized</label>
+                                <span id="summary-yoc-anual">0.00%</span>
+                            </div>
+                            <div class="summary-data-point">
+                                <label>YOC Monthly</label>
+                                <span id="summary-yoc-mensal">0.00%</span>
+                            </div>
+                        </div>
+                        <div class="summary-column">
+                            <h4>Yield on Market</h4>
+                            <div class="summary-data-point">
+                                <label>Yield Annualized</label>
+                                <span id="summary-yield-mercado-anual">0.00%</span>
+                            </div>
+                            <div class="summary-data-point">
+                                <label>Yield Monthly</label>
+                                <span id="summary-yield-mercado-mensal">0.00%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="summary-media-unidade-container" class="summary-data-point" style="margin-top: 15px; text-align: center; display: none; flex-direction: row; justify-content: center; gap: 15px; align-items: center;">
+                        <span>
+                            <label>Monthly Average per Unit</label>
+                            <span id="summary-media-unidade-valor">£ 0.00</span>
+                        </span>
+                        <span style="color: #ccc; font-size: 1.5em; font-weight: 100;">|</span>
+                        <span>
+                            <label>Total Paid per Unit in Period</label>
+                            <span id="summary-total-unidade-valor">£ 0.00</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div class="container" id="lista-de-proventos"></div>
+        </div>
+<div id="tela-renda-variavel" style="display: none;">
+            <div class="page-header">
+                <h1 id="titulo-tela-rv" class="titulo-clicavel-grafico" title="Click to see quote chart for all assets">My Variable Income Position</h1>
+                <div class="page-header-filters">
+                    <button class="btn btn-primary" id="btn-adicionar-ativo-alocacao" title="Include an asset you don't own yet in your allocation strategy.">+ Add Asset to Allocation</button>
+                    <div class="form-group">
+                        <label>Filter by Broker</label>
+                        <select id="rv-filtro-corretora" class="broker-filter" data-tipo-ativo="RendaVariavel">
+                            <option value="consolidado">Consolidated</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Position on</label>
+                        <input type="date" id="rv-filtro-data" class="date-filter" data-tipo-ativo="RendaVariavel">
+                    </div>
+                </div>
+            </div>
+            <div class="page-header-summary" id="summary-rv">
+                </div>
+            <div class="logos-container" id="filtro-info-rv">
+                </div>
+            <div class="info-buttons-container" id="info-buttons-rv">
+                <button class="info-button" data-action="performance">Performance</button>
+                <button class="info-button" data-action="proventos">Income</button>
+                <button class="info-button" data-action="alocacao">Allocation</button>
+            </div>
+            <div class="container" id="posicao-rv-container">
+                </div>
+        </div>
+        <div id="tela-performanceRV" style="display: none;">
+            <div class="page-header">
+                <h1>Consolidated Asset Performance (VI)</h1>
+                <div class="page-header-filters">
+                    <div class="form-group">
+                        <label for="performance-filtro-periodo">Show Periods</label>
+                        <select id="performance-filtro-periodo">
+                            <option value="todos">All Periods</option>
+                            <option value="atuais">Current Portfolio Only</option>
+                            <option value="encerrados">Closed Positions Only</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="performance-filtro-tipo">Filter by Type</label>
+                        <select id="performance-filtro-tipo">
+                            <option value="todos">All Types</option>
+                            <option value="Ação">Shares</option>
+                            <option value="FII">REITs</option>
+                            <option value="ETF">ETFs</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="container" id="container-tabela-performance">
+                </div>
+        </div>
+    </main>
+
+    <div id="custom-tooltip" class="custom-tooltip"></div>
+    
+    <div id="modal-ativo-detalhes" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <h3 id="modal-ativo-detalhes-titulo"></h3>
+            <div id="modal-ativo-detalhes-conteudo">
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-ativo-detalhes')">Close</button>
+            </div>
+        </div>
+    </div>
+    <div id="modal-resumo-negociacao" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <h3 id="modal-resumo-negociacao-titulo">Buy/Sell Order Summary</h3>
+            <div id="modal-resumo-negociacao-conteudo">
+            </div>
+            <p class="info-esc">Click outside to close</p>
+        </div>
+    </div>
+    <div id="modal-cadastro-meta" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <h3 id="modal-meta-titulo">Add New Goal</h3>
+            <form id="form-cadastro-meta">
+                <input type="hidden" id="meta-id">
+                <div class="form-group">
+                    <label for="meta-nome">Goal Name</label>
+                    <input type="text" id="meta-nome" placeholder="Ex: Reach 100k in REITs" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="meta-tipo">Goal Type</label>
+                        <select id="meta-tipo" required>
+                            <option value="patrimonio_moeda">Total Invested Wealth</option>
+                            <option value="renda_passiva_moeda">Monthly Passive Income</option>
+                            <option value="renda_passiva_sm">Passive Income (in Minimum Wages)</option>
+                            <option value="posicao_ativo">Specific Asset Quantity</option>
+                            </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="meta-valor-alvo" id="meta-label-alvo-padrao">Target Value</label>
+                        <label for="meta-valor-alvo" id="meta-label-alvo-sm" style="display: none;">Quantity of Min. Wages</label>
+                        <input type="text" id="meta-valor-alvo" required placeholder="Ex: 2">
+                    </div>
+                </div>
+    
+                <div id="meta-moeda-group" style="display: none;">
+                    <div class="form-row-double">
+                        <div class="form-group">
+                            <label for="meta-moeda-alvo">Goal Currency</label>
+                            <select id="meta-moeda-alvo">
+                                <option value="BRL">Real (BRL)</option>
+                                <option value="USD">Dollar (USD)</option>
+                                <option value="EUR">Euro (EUR)</option>
+                                <option value="GBP">Pound (GBP)</option>
+                                </select>
+                        </div>
+                        <div class="form-group" id="meta-fonte-proventos-group" style="display: none;">
+                            <label for="meta-fonte-proventos">Income Source</label>
+                            <select id="meta-fonte-proventos">
+                                <option value="total_rv">Variable Income (VI)</option>
+                                <option value="total_geral">VI + Fixed Income</option>
+                                <option value="fiis">REITs Only</option>
+                                <option value="acoes">Shares Only</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+    
+                <div class="form-group" id="meta-ativo-alvo-group" style="display: none;">
+                    <label for="meta-ativo-alvo">Target Asset (Ticker)</label>
+                    <input type="text" id="meta-ativo-alvo" class="ticker-input" placeholder="Ex: LLOY">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Save Goal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="floating-calculator" class="floating-calculator">
+        <div class="calculator-header">
+            <span><i class="fas fa-calculator"></i> Calculator</span>
+            <span class="close-calculator" title="Close">&times;</span>
+        </div>
+        <div id="calculator-display" class="calculator-display">0</div>
+        <div class="calculator-buttons">
+            <button class="calc-btn function" data-action="clear">C</button>
+            <button class="calc-btn operator" data-value="/">÷</button>
+            <button class="calc-btn operator" data-value="*">×</button>
+            <button class="calc-btn function" data-action="backspace">⌫</button>
+    
+            <button class="calc-btn" data-value="7">7</button>
+            <button class="calc-btn" data-value="8">8</button>
+            <button class="calc-btn" data-value="9">9</button>
+            <button class="calc-btn operator" data-value="-">−</button>
+    
+            <button class="calc-btn" data-value="4">4</button>
+            <button class="calc-btn" data-value="5">5</button>
+            <button class="calc-btn" data-value="6">6</button>
+            <button class="calc-btn operator" data-value="+">+</button>
+    
+            <button class="calc-btn" data-value="1">1</button>
+            <button class="calc-btn" data-value="2">2</button>
+            <button class="calc-btn" data-value="3">3</button>
+            <button class="calc-btn equals" data-action="calculate">=</button>
+    
+            <button class="calc-btn zero" data-value="0">0</button>
+            <button class="calc-btn" data-value=".">,</button>
+            <button class="calc-btn insert" data-action="insert">Insert</button>
+        </div>
+    </div>
+    <div id="modal-snapshot-detalhes" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <h3 id="modal-snapshot-detalhes-titulo"></h3>
+            <div id="modal-snapshot-detalhes-conteudo">
+                </div>
+            <p class="info-esc">Click outside to close</p>
+        </div>
+    </div>
+    <div id="modal-grafico-cotacoes" class="modal">
+        <div class="modal-content" style="width: 90%; max-width: 1000px; height: 600px;">
+            <div class="modal-header">
+                <h3 id="modal-grafico-cotacoes-titulo">History</h3>
+                <span class="close-btn" onclick="fecharModal('modal-grafico-cotacoes')">&times;</span>
+            </div>
+            
+            <div class="chart-period-controls" style="display: flex; justify-content: center; gap: 10px; margin-bottom: 15px;">
+                <input type="radio" id="periodo-1m" name="periodo-grafico-modal" value="1M" checked>
+                <label for="periodo-1m" class="chart-period-btn">1 Month</label>
+
+                <input type="radio" id="periodo-ytd" name="periodo-grafico-modal" value="YTD">
+                <label for="periodo-ytd" class="chart-period-btn">YTD</label>
+
+                <input type="radio" id="periodo-1a" name="periodo-grafico-modal" value="1A">
+                <label for="periodo-1a" class="chart-period-btn">1 Year</label>
+
+                <input type="radio" id="periodo-5a" name="periodo-grafico-modal" value="5A">
+                <label for="periodo-5a" class="chart-period-btn">5 Years</label>
+            </div>
+
+            <div class="modal-body" style="height: calc(100% - 100px);">
+                <canvas id="grafico-cotacoes-historicas-canvas"></canvas>
+            </div>
+        </div>
+    </div>
+    <div id="modal-investimentos-detalhes" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="page-header" style="margin-bottom: 0;">
+                <h3 id="modal-investimentos-detalhes-titulo">Investment Portfolio Details</h3>
+                <p id="print-timestamp" class="print-only-timestamp"></p> 
+                <i class="fas fa-print fa-lg acao-btn" id="btn-imprimir-investimentos" title="Print Report"></i>
+            </div>
+            <div id="modal-investimentos-detalhes-conteudo" class="container" style="box-shadow: none; padding-top: 10px;">
+            </div>
+            <p class="info-esc">Click outside to close</p>
+        </div>
+    </div>
+    <div id="modal-dashboard-alertas" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <h3 id="modal-dashboard-alertas-titulo">Portfolio Status</h3>
+            <div id="modal-dashboard-alertas-conteudo">
+                </div>
+            <p class="info-esc">Click outside to close</p>
+        </div>
+    </div>
+    <div id="container-impressao-proventos" style="display: none;">
+        <div id="impressao-cabecalho">
+            <h1 id="impressao-titulo">Income Report</h1>
+            <p id="impressao-timestamp"></p>
+            <p id="impressao-filtros"></p>
+        </div>
+        <div id="impressao-resumo"></div>
+        <div id="impressao-tabela"></div>
+    </div>
+    <div id="container-impressao-ativo" style="display: none;">
+    </div>
+    <div id="container-impressao-ir" style="display: none;">
+    </div>
+    <!-- Módulo 1: O Núcleo (Dados e Ferramentas Globais) -->
+    <script src="utils.js"></script>
+    <script src="storage.js"></script>
+    <script src="import-export.js"></script>
+
+    <!-- Módulo 2: O Cérebro (Lógica de Negócios) -->
+    <script src="portfolio.js"></script>
+    <script src="fixed-income.js"></script>
+    <script src="dividends.js"></script>
+    <script src="accounts-ledger.js"></script>
+    <script src="tax-calculator.js"></script>
+    <script src="financial-math.js"></script>
+    <script src="api-quotes.js"></script>
+    <script src="trading-simulator.js"></script>
+    <script src="data-quality.js"></script>
+
+    <!-- Módulo 3: A Interface (Visual e Interações) -->
+    <script src="ui-core.js"></script>
+    <script src="ui-charts.js"></script>
+    <script src="ui-dashboard.js"></script>
+    <script src="ui-views.js"></script>
+
+    <!-- Módulo 4: Ponto de Entrada (O Motor de Arranque) -->
+    <script src="main.js"></script>
+</body>
+</html>
