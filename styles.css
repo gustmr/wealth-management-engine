@@ -122,7 +122,7 @@ td.prejuizo { color: var(--danger-color); }
 .import-review-container h3 { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
 .import-review-container .form-grid { background-color: #f5f5f5; padding: 15px; border-radius: 6px; }
 .import-review-container table input { width: 100%; padding: 8px; font-size: 0.95em; border-radius: 3px; border: 1px solid var(--border-color); }
-.import-review-container.new-asset h3::after { content: '(New Asset Registered)'; color: var(--success-color); font-size: 0.8em; font-style: italic; margin-left: 10px; }
+.import-review-container.new-asset h3::after { content: '(Novo Ativo Cadastrado)'; color: var(--success-color); font-size: 0.8em; font-style: italic; margin-left: 10px; }
 .linha-mes-ir { cursor: pointer; }
 .linha-mes-ir:hover { background-color: #f5f5f5; }
 .ir-details-row td { padding: 0 !important; border-bottom: 2px solid var(--accent-color) !important; }
@@ -3663,12 +3663,95 @@ tr[style*="linear-gradient"]:hover {
     margin-left: 5px;
     font-style: italic;
 }
-/* --- ESTILOS PARA DESTAQUE DE VALOR MÁXIMO EM SNAPSHOTS --- */
-.snapshot-max-value {
-    background-color: var(--light-green-bg);
-    font-weight: bold;
-    color: #218838; /* Um verde um pouco mais escuro para o texto */
+/* --- CABEÇALHO DA TABELA FIXO (STICKY) --- */
+
+/* Garante que o container da tabela permita a rolagem correta */
+#container-historico-snapshots {
+    position: relative; 
 }
+
+/* Fixa o cabeçalho */
+#container-historico-snapshots table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 100; /* Garante que fique acima das linhas ao rolar */
+    background-color: #f8f9fa; /* COR DE FUNDO OBRIGATÓRIA: Evita transparência */
+    box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1); /* Sombra suave para separar do conteúdo */
+}
+/* Container do Título + Select */
+.titulo-com-filtro {
+    display: flex;
+    align-items: center;
+    gap: 15px; /* Espaço entre título e select */
+}
+
+/* Estilo do Dropdown */
+.select-periodo-snapshot {
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    background-color: #fff;
+    font-size: 0.9em;
+    color: #333;
+    cursor: pointer;
+    outline: none;
+}
+
+.select-periodo-snapshot:focus {
+    border-color: var(--primary-color);
+}
+/* --- ESTILOS PARA DESTAQUE DE SNAPSHOTS (MÁXIMA E MÍNIMA) --- */
+
+/* Máxima Histórica (Já existente, mantida para referência) */
+.snapshot-max-value {
+    background-color: var(--light-green-bg); /* ou a cor que já estiver definida */
+    font-weight: bold;
+    color: #218838;
+}
+
+/* NOVA: Mínima dos Últimos 30 Dias */
+.snapshot-min-recent {
+    background-color: #e9ecef; /* Cinza claro */
+    font-weight: bold;
+    color: #495057; /* Cinza chumbo */
+}
+
+/* Legenda do Cabeçalho */
+.header-controles-snapshot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.header-controles-snapshot h3 {
+    margin: 0;
+}
+
+.snapshot-legenda {
+    display: flex;
+    gap: 15px;
+    font-size: 0.85em;
+    color: #555;
+}
+
+.legenda-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.legenda-box {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    display: inline-block;
+}
+
+/* Cores das caixinhas da legenda */
+.box-max { background-color: #d4edda; border: 1px solid #c3e6cb; } /* Verde claro padrão bootstrap */
+.box-min { background-color: #e9ecef; border: 1px solid #dee2e6; }
+
 /* --- ESTILOS PARA TÍTULOS CLICÁVEIS DE GRÁFICO --- */
 .titulo-clicavel-grafico {
     cursor: pointer;
@@ -4028,4 +4111,467 @@ tr[style*="linear-gradient"]:hover {
 #tooltip, 
 div[class*="tooltip"] {
     z-index: 9999999 !important;
+}
+/* Estilo Hacker para o Botão de Atualização */
+.btn-hacker-log {
+    background-color: #000000 !important; /* Fundo Preto */
+    color: #00ff00 !important; /* Fonte Verde Terminal */
+    font-family: 'Courier New', Courier, monospace; /* Fonte Monoespaçada */
+    font-size: 0.75rem !important; /* Fonte pequena */
+    line-height: 1.2 !important;
+    text-align: left !important;
+    padding: 5px 10px !important;
+    white-space: pre-wrap !important; /* Permite quebra de linha (\n) */
+    display: flex !important;
+    align-items: center;
+    justify-content: flex-start;
+    height: 45px; /* Altura fixa para caber 2 linhas sem pular */
+    overflow: hidden;
+    border: 1px solid #00ff00 !important;
+    transition: all 0.2s ease;
+    opacity: 1 !important; /* Garante que não fique apagado se estiver disabled */
+}
+
+/* Pequena animação para o cursor ou texto */
+@keyframes blink { 50% { opacity: 0; } }
+.btn-hacker-cursor::after {
+    content: '_';
+    animation: blink 1s step-end infinite;
+}
+/* Classe para indicar ativo inválido no cadastro em massa */
+.input-erro {
+    border: 2px solid #ff4444 !important; /* Borda Vermelha */
+    background-color: #ffe6e6 !important; /* Fundo levemente avermelhado */
+    color: #cc0000;
+}
+/* Estilos para Seleção de Snapshots */
+.linha-snapshot-selecionada {
+    background-color: #d1e7dd !important; /* Verde claro */
+    border-left: 4px solid #198754;
+}
+
+.snapshot-bloqueado {
+    opacity: 0.5;
+    cursor: not-allowed !important;
+}
+
+/* Header da área de snapshots para alinhar botões */
+.header-controles-snapshot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+#btn-comparar-snapshots {
+    display: none; /* Começa invisível */
+    background-color: #6f42c1; /* Roxo para diferenciar */
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+#btn-comparar-snapshots:hover {
+    background-color: #59359a;
+    transform: scale(1.05);
+}
+/* --- Modal de Comparação --- */
+.comp-grid-container {
+    display: grid;
+    /* A primeira coluna é para os rótulos, as outras são automáticas para as datas */
+    grid-template-columns: 200px repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-bottom: 25px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 20px;
+}
+
+.comp-header-cell {
+    font-weight: bold;
+    text-align: center;
+    background-color: #f8f9fa;
+    padding: 10px;
+    border-radius: 8px;
+    border-bottom: 3px solid #ddd;
+}
+
+.comp-label-cell {
+    font-weight: 600;
+    color: #444;
+    display: flex;
+    align-items: center;
+    padding: 8px;
+}
+
+.comp-data-cell {
+    text-align: right;
+    padding: 8px;
+    border-left: 1px solid #eee;
+    position: relative;
+}
+
+/* Variações (Badges) */
+.comp-diff-badge {
+    display: block;
+    font-size: 0.75rem;
+    margin-top: 4px;
+    font-weight: bold;
+}
+
+.diff-positive { color: #198754; }
+.diff-negative { color: #dc3545; }
+.diff-neutral { color: #6c757d; }
+
+/* Seções */
+.comp-section-title {
+    grid-column: 1 / -1;
+    font-size: 1.1rem;
+    color: #2c3e50;
+    margin-top: 15px;
+    margin-bottom: 5px;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 5px;
+    font-weight: bold;
+}
+
+/* Card de Destaque (Aportes vs Rentabilidade) */
+.comp-analysis-card {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    margin-top: 10px;
+    border-left: 5px solid #007bff;
+}
+
+.comp-analysis-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    border-bottom: 1px dotted #ccc;
+    padding-bottom: 4px;
+}
+
+.comp-analysis-row:last-child {
+    border-bottom: none;
+}
+/* --- Botão Flutuante de Comparação --- */
+#btn-comparar-snapshots {
+    position: fixed;
+    bottom: 30px;
+    right: 30px; /* Canto inferior direito */
+    z-index: 1050; /* Alto z-index para ficar sobre tudo */
+    
+    display: none; /* Começa oculto */
+    
+    background-color: #6f42c1;
+    color: white;
+    border: none;
+    padding: 15px 25px;
+    border-radius: 50px; /* Arredondado */
+    font-size: 1.1rem;
+    font-weight: bold;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3); /* Sombra para destaque */
+    cursor: pointer;
+    transition: all 0.3s ease;
+    animation: slideInUp 0.5s ease;
+}
+
+#btn-comparar-snapshots:hover {
+    background-color: #59359a;
+    transform: translateY(-5px) scale(1.05); /* Leve subida ao passar o mouse */
+    box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+}
+
+/* Animação de entrada */
+@keyframes slideInUp {
+    from { transform: translateY(100px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+/* --- Estilos dos Sub-itens no Modal --- */
+.comp-sub-item {
+    display: flex;
+    justify-content: space-between;
+    padding-left: 20px; /* Indentação */
+    font-size: 0.9em;
+    color: #555;
+    margin-bottom: 4px;
+    border-left: 2px solid #ddd; /* Linha guia visual */
+    margin-left: 5px;
+}
+/* Estilos do Modal de Detalhes de Rebalanceamento */
+.modal-detalhe-header {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border-left: 5px solid var(--primary-color);
+}
+
+.tabela-auditoria-score {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 0.9em;
+}
+
+.tabela-auditoria-score th {
+    text-align: left;
+    padding: 8px;
+    border-bottom: 2px solid #eee;
+    color: #666;
+}
+
+.tabela-auditoria-score td {
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+}
+
+.coluna-nota {
+    font-weight: bold;
+    color: #333;
+}
+
+.coluna-contribuicao {
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+.tag-peso {
+    background: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    color: #555;
+}
+
+.auditoria-decisao-venda {
+    background: #fff5f5;
+    border: 1px solid #ffcccc;
+    padding: 15px;
+    border-radius: 6px;
+}
+
+.item-checklist {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.item-checklist i {
+    margin-right: 10px;
+    width: 20px;
+    text-align: center;
+}
+/* Layout Híbrido da Tela de RV */
+.rv-controls-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    align-items: center;
+}
+.rv-filter-group {
+    display: flex;
+    gap: 10px;
+    flex: 1;
+    min-width: 300px;
+}
+.info-buttons-container-modern {
+    display: flex;
+    gap: 8px;
+}
+.info-buttons-container-modern button {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    /* Garante que pareça clicável */
+    cursor: pointer; 
+}
+
+/* Headers das Tabelas */
+.titulo-clicavel-grafico {
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.titulo-clicavel-grafico:hover {
+    opacity: 0.8;
+}
+/* Tooltip Flutuante JS (Fica sobre qualquer elemento) */
+#tooltip-flutuante {
+    position: fixed; /* Ignora as barreiras da tabela */
+    background: rgba(33, 37, 41, 0.98); /* Fundo escuro quase opaco */
+    color: #fff;
+    padding: 15px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    z-index: 99999; /* Garante que fique no topo de tudo */
+    max-width: 350px; /* Largura boa para leitura */
+    white-space: pre-wrap; /* Respeita as quebras de linha */
+    display: none; /* Começa invisível */
+    box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+    pointer-events: none; /* O mouse "atravessa" ele, não atrapalha o clique */
+    border-left: 4px solid #3498db; /* Detalhe azul lateral */
+}
+/* --- Destaques da Tela de Simulação --- */
+
+/* Linha de Compra (Verde Claro Suave) */
+tr.simulacao-compra,
+tr.simulacao-compra > td {
+    background-color: #d1e7dd !important; /* Força sobre o zebrado */
+    color: #0f5132 !important; /* Texto Verde Escuro para contraste */
+}
+
+/* Linha de Venda (Vermelho Claro Suave) */
+tr.simulacao-venda,
+tr.simulacao-venda > td {
+    background-color: #f8d7da !important;
+    color: #842029 !important; /* Texto Vermelho Escuro */
+}
+
+/* Correção dos Botões Cinza Claro (Outline Secondary) */
+.btn-outline-secondary {
+    color: #000000 !important; /* Fonte Preta para leitura */
+    border-color: #ced4da !important;
+    font-weight: 500;
+}
+.btn-outline-secondary:hover {
+    background-color: #e9ecef !important;
+    color: #000 !important;
+}
+/* =========================================
+   ESTILOS DO DASHBOARD (Novas Telas)
+   ========================================= */
+
+/* 1. Estrutura do Card Principal */
+.dash-card {
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05); /* Sombra suave */
+    border: 1px solid #e9ecef;
+    margin-bottom: 25px;
+    overflow: hidden; /* Para o header não vazar as bordas arredondadas */
+    transition: transform 0.2s ease;
+}
+
+/* 2. Cabeçalho do Card */
+.dash-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid #eee;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Variantes de Cor do Header */
+.dash-header.bg-success { background-color: #2ecc71 !important; color: white; }
+.dash-header.bg-danger { background-color: #e74c3c !important; color: white; }
+.dash-header.bg-light { background-color: #f8f9fa !important; color: #343a40; }
+
+/* 3. Corpo do Card */
+.dash-body {
+    padding: 20px;
+}
+
+/* 4. Grid de Resumo (Cards do Topo) */
+.dash-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 25px;
+}
+
+.dash-summary-card {
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+    border: 1px solid #eee;
+    border-left: 5px solid var(--primary-color); /* Linha colorida na esquerda */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.dash-card-title {
+    font-size: 0.85em;
+    text-transform: uppercase;
+    color: #7f8c8d;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.dash-card-value {
+    font-size: 1.6em;
+    font-weight: 700;
+    color: #2c3e50;
+}
+
+/* 5. Estilos Específicos do Rebalanceamento (Lista de Sugestões) */
+.card.shadow-sm {
+    border: 1px solid #e3e6f0;
+    transition: all 0.2s;
+}
+
+.card.shadow-sm:hover {
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1) !important;
+    transform: translateY(-2px);
+}
+
+/* Botões de Rádio (Seletor de Estratégia) */
+.btn-group-toggle .btn {
+    border-radius: 20px !important;
+    padding: 5px 20px;
+    margin: 0 5px;
+}
+.btn-group-toggle .btn.active {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+    box-shadow: inset 0 3px 5px rgba(0,0,0,0.125);
+}
+
+/* Inputs Grandes (Aporte) */
+#balanceamento-aporte-valor, #negociar-aporte-valor {
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    padding: 10px;
+    transition: border-color 0.3s;
+}
+#balanceamento-aporte-valor:focus, #negociar-aporte-valor:focus {
+    border-color: #3498db;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+/* Ajustes de Tabela dentro do Card */
+.dash-body.table-responsive {
+    padding: 0; /* Remove padding para a tabela encostar nas bordas */
+}
+.dash-body table {
+    margin-bottom: 0;
+}
+.dash-body table th {
+    border-top: none;
+}
+/* Força a cor azul nos botões de ação da barra de ferramentas de proventos */
+#btn-exportar-proventos, 
+#btn-importar-proventos, 
+#btn-imprimir-proventos {
+    color: #3498db !important; /* Azul do mesmo tom do 'Novo' */
+    font-weight: bold;
+}
+
+/* Opcional: Se quiser que o ícone dentro deles também fique azul caso não herde */
+#btn-exportar-proventos i, 
+#btn-importar-proventos i, 
+#btn-imprimir-proventos i {
+    color: #3498db !important;
 }

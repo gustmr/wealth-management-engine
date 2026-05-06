@@ -1,6 +1,4 @@
-// ********** PARTE 1 - Estado Global, Funções Utilitárias e Configurações
-// --- ESTADO DA APLICAÇÃO ---
-// --- ESTADO DE AUTENTICAÇÃO ---
+// Global State // Estado Global
 let currentUser = null;
 const APP_VERSION = 35;
 const BACKUP_ALERT_THRESHOLD = 10; // Número de alterações para o alerta visual
@@ -14,6 +12,8 @@ let sortConfigPerformanceRV = { key: 'valorDeMercado', direction: 'descending' }
 let userName = '';
 let autoUpdateEnabled = false;
 let autoUpdateIntervalId = null;
+let boardInterval = null;
+let snapshotsSelecionados = [];
 let dadosComparacao = null;
 let configuracoesGraficos = { evolucao: { hidden: [] }, desempenho: { hidden: [] } };
 let linksExternos = { acoes: '', fiis: '', etfs: '' };
@@ -26,10 +26,33 @@ let todasAsTransacoesRecorrentes = [];
 let dadosAlocacao = { categorias: {}, ativos: {} };
 let dadosDeMercado = { timestamp: null, cotacoes: {} };
 let dadosSimulacaoNegociar = { fiis: {}, acoes: {} };
+let cacheInicioIninterrupto = null;
+let filtroPeriodoSnapshot = '1'; // Padrão: 1 mês
 let configuracoesFiscais = { 
     aliquotaAcoes: 0.15, 
     aliquotaFiisDt: 0.20, 
     limiteIsencaoAcoes: 20000,
+    aliquotaRendimentosFIIs: 0,
+    aliquotaRendimentosGeral: 0,
+    aliquotaDividendosGeral: 0,
+    aliquotaJCPGeral: 0.15,
+    aliquotaBonificacoesGeral: 0,
+    margemLucroVenda: 0.10,
+    toleranciaRebalanceamento: 0.30,
+    considerarRegrasVenda: true,
+    // --- NOVO: Pesos do Score (Padrão do Sistema) ---
+    pesosScore: {
+        acoes: {
+            dy: 45,
+            bazin: 35,
+            payout: 5,
+            datacom: 15 // Calculado (100 - 45 - 35 - 5)
+        },
+        fiis: {
+            dy: 60,
+            pvp: 40 // Calculado (100 - 60)
+        }
+    },
     tabelaRegressivaIR: {
         180: 0.225,
         360: 0.200,
@@ -37,6 +60,7 @@ let configuracoesFiscais = {
         9999: 0.150
     }
 };
+let salarioMinimo = 1518.00; // Valor padrão para 2025, pode ser ajustado pelo usuário
 let urlCotacoesCSV = '';
 let telas = {}, modalCadastroAtivo, modalResumoNegociacao, modalEdicaoOperacao, modalPosicaoInicial, modalLancamentoProvento, modalCadastroConta, modalCadastroFeriado, modalNovaTransacao, modalEdicaoTransacaoProvento, modalCorrigirData, modalResumoDividendosAtivo, modalInformarValoresVenda, modalPerformanceDetalhes, modalProventosCalendario, modalProventosCalendarioAcoes, modalEventoCorporativo, modalBalanceamentoDetalhes, modalEventoAtivo, modalCorrigirProventosOrfaos, modalDetalhesIRMes, modalDashboardAlertas;
 let graficoAlocacaoInstance = null;
@@ -49,6 +73,7 @@ let graficoPrecoVsPmInstance = null;
 let graficoPrecoVsPmModalInstance = null;
 let modalGraficoCotacoes;
 let graficoHistoricoCotacoesInstance = null;
+let graficoHistoricoAtivoInstance = null;
 let historicoCarteira = [];      
 let modalCadastroAtivoRF, modalAporteRF, modalResgateRF;
 let modalCadastroAtivoMoeda, modalNovaTransacaoMoeda; // Novos modais para Moedas
@@ -71,23 +96,34 @@ let graficoAportesInstance = null;
 let tipoGraficoAportes = 'barras'; // Pode ser 'barras' ou 'linhas'
 let timestampUltimoBackup = null;
 let isNavigating = false; // Flag para controlar o listener durante a navegação
-let graficoHistoricoAtivoInstance = null;
+let ultimaAssinaturaAtivos = ''; // Variável para controlar se a lista de ativos mudou
 let calculatorTargetInput = null;
 let calculatorDisplay;
-let salarioMinimo = 1518.00; // Valor padrão para 2025, pode ser ajustado pelo usuário
-let unsubcribeFirestoreListener = null; // Variável global para guardar a função de desligar o listener
+let unsubcribeFirestoreListener = null;
 
+// ****************************
 
-
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
     mainContent = document.querySelector('.main-content');
     sidebar = document.querySelector('.sidebar');
-    const dadosInjetados = await inicializarDadosDeDemonstracao();
-    if (dadosInjetados) {
-        window.location.reload();
-        return; 
+    // --- INICIALIZAÃ‡ÃƒO DO IDIOMA (i18n) ---
+    const savedLanguage = localStorage.getItem('userLanguage') || 'pt-BR';
+    if(typeof changeLanguage === 'function') {
+        changeLanguage(savedLanguage);
     }
-  
+    
+    // Listener para o botÃ£o de troca de idioma no Dashboard
+    const btnTrocarIdioma = document.getElementById('btn-trocar-idioma');
+    if(btnTrocarIdioma) {
+        btnTrocarIdioma.addEventListener('click', () => {
+            const currentLang = localStorage.getItem('userLanguage') || 'pt-BR';
+            // Alterna entre pt-BR e en-GB
+            const newLang = currentLang === 'pt-BR' ? 'en-GB' : 'pt-BR';
+            changeLanguage(newLang);
+        });
+    }
+    // ----------------------------------------
+    carregarTodosOsDados();
     carregarContadorAlteracoes();
     verificarStatusBackup();
     renderizarInfoBackup();
@@ -276,54 +312,55 @@ document.addEventListener('DOMContentLoaded', async () => {
                 case 'eventosAtivos': renderizarTelaEventosAtivos(); atualizarIconeDeAlertasGlobal(); break;
                 case 'ajustePM': document.getElementById('container-ajuste-pm-lista').style.display = 'none'; document.getElementById('form-buscar-posicao-pm').reset(); atualizarIconeDeAlertasGlobal(); break;
                 case 'configuracoes':
-                    // --- LEITURA FORÇADA DIRETO DO STORAGE (Correção do Bug) ---
-                    // Isso garante que o campo mostre o que está salvo, mesmo se a variável global falhar
-                    
-                    // 1. URL Cotações
-                    let urlSalva = localStorage.getItem('carteira_url_cotacoes_csv_offline');
-                    if (urlSalva) { 
-                        try { urlSalva = JSON.parse(urlSalva); } catch(e){} // Remove aspas se houver
-                        urlCotacoesCSV = urlSalva; // Atualiza global
-                    }
-                    document.getElementById('config-cotacoes-url').value = urlSalva || '';
-
-                    // 2. Configurações Fiscais
-                    let fiscalSalvo = localStorage.getItem('carteira_configuracoes_fiscais_offline');
-                    let fiscalObj = { aliquotaAcoes: 0.15, aliquotaFiisDt: 0.20, limiteIsencaoAcoes: 20000, tabelaRegressivaIR: { 180: 0.225, 360: 0.20, 720: 0.175, 9999: 0.15 } };
-                    if (fiscalSalvo) {
-                        try { fiscalObj = { ...fiscalObj, ...JSON.parse(fiscalSalvo) }; configuracoesFiscais = fiscalObj; } catch(e){}
-                    }
-                    
-                    document.getElementById('config-aliquota-swing').value = formatarDecimal(fiscalObj.aliquotaAcoes * 100);
-                    document.getElementById('config-aliquota-daytrade').value = formatarDecimal(fiscalObj.aliquotaFiisDt * 100);
-                    document.getElementById('config-limite-isencao').value = formatarMoeda(fiscalObj.limiteIsencaoAcoes).replace('R$ ', '');
-                    
-                    const tabIR = fiscalObj.tabelaRegressivaIR || {};
-                    document.querySelector('.config-ir-fixa-faixa[data-faixa="180"]').value = formatarDecimal((tabIR[180] || 0.225) * 100);
-                    document.querySelector('.config-ir-fixa-faixa[data-faixa="360"]').value = formatarDecimal((tabIR[360] || 0.20) * 100);
-                    document.querySelector('.config-ir-fixa-faixa[data-faixa="720"]').value = formatarDecimal((tabIR[720] || 0.175) * 100);
-                    document.querySelector('.config-ir-fixa-faixa[data-faixa="9999"]').value = formatarDecimal((tabIR[9999] || 0.15) * 100);
-
-                    // 3. Links Externos
-                    let linksSalvos = localStorage.getItem('carteira_links_externos_offline');
-                    let linksObj = { acoes: '', fiis: '', etfs: '' };
-                    if (linksSalvos) {
-                         try { linksObj = { ...linksObj, ...JSON.parse(linksSalvos) }; linksExternos = linksObj; } catch(e){}
-                    }
-                    document.getElementById('config-link-acoes').value = linksObj.acoes || '';
-                    document.getElementById('config-link-fiis').value = linksObj.fiis || '';
-                    document.getElementById('config-link-etfs').value = linksObj.etfs || '';
-
-                    // 4. Auto Update e Outros
-                    const autoUpdateRaw = localStorage.getItem('carteira_auto_update_enabled_offline');
-                    let autoUpdateVal = false;
-                    try { autoUpdateVal = JSON.parse(autoUpdateRaw) === true; } catch(e) { autoUpdateVal = autoUpdateRaw === 'true'; }
-                    document.getElementById('config-auto-update-toggle').checked = autoUpdateVal;
-                    autoUpdateEnabled = autoUpdateVal;
-
-                    document.getElementById('config-user-name').value = userName || '';
+                    document.getElementById('config-user-name').value = userName;
+                    document.getElementById('config-auto-update-toggle').checked = autoUpdateEnabled;
                     document.getElementById('config-salario-minimo').value = formatarDecimalParaInput(salarioMinimo);
+                    document.getElementById('config-cotacoes-url').value = urlCotacoesCSV;
                     document.getElementById('resultados-inconsistencias').innerHTML = '';
+                    
+                    // --- Parâmetros Estratégicos (NOVOS) ---
+                    // Carrega Margem, Tolerância e o Checkbox de Regras
+                    const inputMargemVenda = document.getElementById('config-margem-venda');
+                    if (inputMargemVenda) inputMargemVenda.value = formatarDecimal(configuracoesFiscais.margemLucroVenda * 100);
+
+                    const inputTolerancia = document.getElementById('config-tolerancia-rebalanceamento');
+                    if (inputTolerancia) inputTolerancia.value = formatarDecimal(configuracoesFiscais.toleranciaRebalanceamento * 100);
+
+                    const checkRegras = document.getElementById('config-considerar-regras-venda');
+                    if (checkRegras) checkRegras.checked = configuracoesFiscais.considerarRegrasVenda;
+
+                    // --- Carregamento de Pesos do Score ---
+                    // Ações
+                    document.getElementById('config-peso-acoes-dy').value = configuracoesFiscais.pesosScore.acoes.dy;
+                    document.getElementById('config-peso-acoes-bazin').value = configuracoesFiscais.pesosScore.acoes.bazin;
+                    document.getElementById('config-peso-acoes-payout').value = configuracoesFiscais.pesosScore.acoes.payout;
+                    document.getElementById('config-peso-acoes-datacom').value = configuracoesFiscais.pesosScore.acoes.datacom;
+                    
+                    // FIIs
+                    document.getElementById('config-peso-fiis-dy').value = configuracoesFiscais.pesosScore.fiis.dy;
+                    document.getElementById('config-peso-fiis-pvp').value = configuracoesFiscais.pesosScore.fiis.pvp;
+
+                    // Parâmetros Fiscais - Renda Variável
+                    document.getElementById('config-aliquota-swing').value = formatarDecimal(configuracoesFiscais.aliquotaAcoes * 100);
+                    document.getElementById('config-aliquota-daytrade').value = formatarDecimal(configuracoesFiscais.aliquotaFiisDt * 100);
+                    document.getElementById('config-limite-isencao').value = formatarMoeda(configuracoesFiscais.limiteIsencaoAcoes).replace('R$ ', '');
+                    
+                    // Parâmetros Fiscais - Proventos
+                    document.getElementById('config-aliquota-rend-fiis').value = formatarDecimal((configuracoesFiscais.aliquotaRendimentosFIIs || 0) * 100);
+                    document.getElementById('config-aliquota-rend-geral').value = formatarDecimal((configuracoesFiscais.aliquotaRendimentosGeral || 0) * 100);
+                    document.getElementById('config-aliquota-div-geral').value = formatarDecimal((configuracoesFiscais.aliquotaDividendosGeral || 0) * 100);
+                    document.getElementById('config-aliquota-jcp-geral').value = formatarDecimal((configuracoesFiscais.aliquotaJCPGeral || 0) * 100);
+                    document.getElementById('config-aliquota-bonif-geral').value = formatarDecimal((configuracoesFiscais.aliquotaBonificacoesGeral || 0) * 100);
+
+                    // Parâmetros Fiscais - Renda Fixa
+                    document.querySelector('.config-ir-fixa-faixa[data-faixa="180"]').value = formatarDecimal(configuracoesFiscais.tabelaRegressivaIR[180] * 100);
+                    document.querySelector('.config-ir-fixa-faixa[data-faixa="360"]').value = formatarDecimal(configuracoesFiscais.tabelaRegressivaIR[360] * 100);
+                    document.querySelector('.config-ir-fixa-faixa[data-faixa="720"]').value = formatarDecimal(configuracoesFiscais.tabelaRegressivaIR[720] * 100);
+                    document.querySelector('.config-ir-fixa-faixa[data-faixa="9999"]').value = formatarDecimal(configuracoesFiscais.tabelaRegressivaIR[9999] * 100);
+                    
+                    document.getElementById('config-link-acoes').value = linksExternos.acoes;
+                    document.getElementById('config-link-fiis').value = linksExternos.fiis;
+                    document.getElementById('config-link-etfs').value = linksExternos.etfs;
                     
                     atualizarIconeDeAlertasGlobal();
                     break;
@@ -546,25 +583,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!target.closest('.provento-item-container')) {
             document.querySelectorAll('.provento-acoes').forEach(el => el.style.display = 'none');
         }
-        const salvarParametroFiscalIndividualmente = (e) => {
-            const input = e.target;
-            const valor = parseDecimal(input.value);
-            if (input.id.startsWith('config-')) {
-                switch (input.id) {
-                    case 'config-aliquota-swing': configuracoesFiscais.aliquotaAcoes = valor / 100; break;
-                    case 'config-aliquota-daytrade': configuracoesFiscais.aliquotaFiisDt = valor / 100; break;
-                    case 'config-limite-isencao': configuracoesFiscais.limiteIsencaoAcoes = valor; break;
-                }
-            } else if (input.classList.contains('config-ir-fixa-faixa')) {
-                const faixa = input.dataset.faixa;
-                if (faixa && configuracoesFiscais.tabelaRegressivaIR.hasOwnProperty(faixa)) {
-                    configuracoesFiscais.tabelaRegressivaIR[faixa] = valor / 100;
-                }
-            }
-            salvarConfiguracoesFiscais();
-        };
-        document.querySelectorAll('#config-aliquota-swing, #config-aliquota-daytrade, #config-limite-isencao, .config-ir-fixa-faixa').forEach(input => {
+        // Listener unificado para salvar configurações fiscais e estratégicas
+        document.querySelectorAll('#config-aliquota-swing, #config-aliquota-daytrade, #config-limite-isencao, #config-aliquota-rend-fiis, #config-aliquota-rend-geral, #config-aliquota-div-geral, #config-aliquota-jcp-geral, #config-aliquota-bonif-geral, #config-margem-venda, #config-margem-modo-seguro, #config-tolerancia-rebalanceamento, #config-considerar-regras-venda, .config-ir-fixa-faixa').forEach(input => {
             input.addEventListener('change', salvarParametroFiscalIndividualmente);
+        });
+        // NOVO: Listener Exclusivo para os Pesos (Usa 'input' para reação imediata ao digitar)
+        document.querySelectorAll('.input-peso-score').forEach(input => {
+            input.addEventListener('input', gerenciarPesosScore);
         });
         const navLink = target.closest('a[data-tela]');
         if (navLink && !navLink.closest('.sidebar')) {
@@ -1077,18 +1102,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     document.getElementById('btn-dashboard-backup').addEventListener('click', fazerBackup);
     document.getElementById('btn-backup').addEventListener('click', fazerBackup);
-    document.getElementById('config-link-acoes').addEventListener('change', (e) => { linksExternos.acoes = e.target.value.trim(); salvarLinksExternos(); });
-    document.getElementById('config-link-fiis').addEventListener('change', (e) => { linksExternos.fiis = e.target.value.trim(); salvarLinksExternos(); });
-    document.getElementById('config-link-etfs').addEventListener('change', (e) => { linksExternos.etfs = e.target.value.trim(); salvarLinksExternos(); });
+    const inputsConfig = document.querySelectorAll('#tela-configuracoes input');
+    inputsConfig.forEach(input => {
+        // Remove listener anterior (segurança)
+        input.removeEventListener('change', salvarParametroFiscalIndividualmente);
+        // Adiciona o novo gatilho unificado
+        input.addEventListener('change', salvarParametroFiscalIndividualmente);
+    });
     document.getElementById('filtro-caixa-data-inicio').addEventListener('change', () => renderizarTelaCaixaGlobal(true));
     document.getElementById('filtro-caixa-data-fim').addEventListener('change', () => renderizarTelaCaixaGlobal(true));
     document.getElementById('config-cotacoes-url').addEventListener('change', (e) => { urlCotacoesCSV = e.target.value.trim(); salvarUrlCotacoes(); });
     document.getElementById('form-nova-transacao-moeda').addEventListener('submit', (e) => { 
         e.preventDefault(); 
         salvarMovimentacaoUniversal(e); // <-- CORREÇÃO: Passa o evento (e)
-    });
-    document.getElementById('titulo-tela-rv').addEventListener('click', () => {
-        abrirModalGraficoCotacoesHistoricas('todos');
     });
     document.getElementById('form-add-operacao').addEventListener('submit', adicionarOperacao);
     document.getElementById('form-edicao-operacao').addEventListener('submit', salvarEdicaoOperacao);
@@ -1107,6 +1133,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const tipoAtivo = document.getElementById('ativo-tipo').value;
         const metaYield = tipoAtivo === 'Ação' ? parseDecimal(document.getElementById('ativo-meta-yield-bazin').value) / 100 : 0;
         
+        // --- NOVO: Captura o subtipo se for FII ---
+        const subtipoFii = tipoAtivo === 'FII' ? document.getElementById('ativo-subtipo-fii').value : null;
+
         if (id) { // --- MODO EDIÇÃO ---
             const ativoOriginal = todosOsAtivos.find(a => a.id === parseFloat(id));
             if (!ativoOriginal) {
@@ -1199,6 +1228,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 todosOsAtivos[index].adminNome = document.getElementById('ativo-admin-nome').value;
                 todosOsAtivos[index].adminCnpj = adminCnpjInput;
                 todosOsAtivos[index].metaYieldBazin = metaYield;
+                // --- Atualiza o Subtipo ---
+                todosOsAtivos[index].subtipoFii = subtipoFii;
             }
 
         } else { // --- MODO CRIAÇÃO ---
@@ -1206,7 +1237,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 id: Date.now(), ticker: novoTicker, tipo: tipoAtivo,
                 nomePregao: document.getElementById('ativo-nome-pregao').value, nome: document.getElementById('ativo-nome').value,
                 cnpj: cnpjInput, tipoAcao: document.getElementById('ativo-tipo-acao').value, adminNome: document.getElementById('ativo-admin-nome').value,
-                adminCnpj: adminCnpjInput, metaYieldBazin: metaYield, statusAporte: 'Ativo'
+                adminCnpj: adminCnpjInput, metaYieldBazin: metaYield, 
+                // --- Insere o Subtipo ---
+                subtipoFii: subtipoFii,
+                statusAporte: 'Ativo'
             };
             todosOsAtivos.push(ativo);
         }
@@ -1331,80 +1365,116 @@ document.addEventListener('DOMContentLoaded', async () => {
             saveButton.disabled = false;
         }
     });
-    document.getElementById('form-cadastro-conta').addEventListener('submit', (e) => {
+    document.getElementById('form-cadastro-conta').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const id = document.getElementById('conta-id').value;
-        const tipoOriginal = document.getElementById('conta-tipo-original').value;
-        const moeda = document.getElementById('conta-moeda').value;
-        let savePromise;
-        
-        if (moeda === 'BRL') {
-            let bancoNome = document.getElementById('conta-banco').value;
-            if (bancoNome === 'Outro') { bancoNome = document.getElementById('conta-outro-banco').value; }
-            if (!bancoNome) { alert('O nome do banco é obrigatório.'); return; }
+        const saveButton = e.target.querySelector('button[type="submit"]');
+        const originalButtonText = saveButton.innerHTML;
+        saveButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+        saveButton.disabled = true;
 
-            const conta = {
-                id: id ? parseFloat(id) : Date.now(),
-                banco: bancoNome,
-                tipo: document.getElementById('conta-tipo').value,
-                moeda: 'BRL',
-                numeroBanco: document.getElementById('conta-numero-banco').value,
-                agencia: document.getElementById('conta-agencia').value,
-                numero: document.getElementById('conta-numero').value,
-                pix: document.getElementById('conta-pix').value,
-                saldoInicial: parseDecimal(document.getElementById('conta-saldo-inicial').value),
-                dataSaldoInicial: document.getElementById('conta-data-saldo-inicial').value,
-                notas: document.getElementById('conta-notas').value
-            };
-
-            let index = -1;
-            if(id) index = todasAsContas.findIndex(c => String(c.id) === String(id));
+        try {
+            const id = document.getElementById('conta-id').value;
+            const tipoOriginal = document.getElementById('conta-tipo-original').value;
+            const moeda = document.getElementById('conta-moeda').value;
             
-            if (index > -1) {
-                todasAsContas[index] = conta;
-            } else {
-                todasAsContas.push(conta);
+            if (moeda === 'BRL') {
+                let bancoNome = document.getElementById('conta-banco').value;
+                // CORREÇÃO: Verifica 'Adicionar' em vez de 'Outro'
+                if (bancoNome === 'Adicionar') { 
+                    bancoNome = document.getElementById('conta-outro-banco').value.trim(); 
+                }
+                
+                if (!bancoNome) { alert('O nome do banco é obrigatório.'); return; }
+
+                // --- LÓGICA DE DETECÇÃO DE MUDANÇA DE NOME (MIGRAÇÃO) ---
+                let nomeAntigoBanco = null;
+                const contaExistenteIndex = id ? todasAsContas.findIndex(c => String(c.id) === String(id)) : -1;
+                
+                if (contaExistenteIndex > -1) {
+                    nomeAntigoBanco = todasAsContas[contaExistenteIndex].banco;
+                }
+
+                const conta = {
+                    id: id ? parseFloat(id) : Date.now(),
+                    banco: bancoNome,
+                    tipo: document.getElementById('conta-tipo').value,
+                    moeda: 'BRL',
+                    numeroBanco: document.getElementById('conta-numero-banco').value,
+                    agencia: document.getElementById('conta-agencia').value,
+                    numero: document.getElementById('conta-numero').value,
+                    pix: document.getElementById('conta-pix').value,
+                    saldoInicial: parseDecimal(document.getElementById('conta-saldo-inicial').value),
+                    dataSaldoInicial: document.getElementById('conta-data-saldo-inicial').value,
+                    notas: document.getElementById('conta-notas').value
+                };
+
+                // Atualiza ou adiciona a conta
+                if (contaExistenteIndex > -1) {
+                    todasAsContas[contaExistenteIndex] = conta;
+                } else {
+                    todasAsContas.push(conta);
+                }
+                
+                await salvarContas();
+
+                // Verifica se deve oferecer a migração
+                if (id && nomeAntigoBanco && nomeAntigoBanco !== bancoNome && conta.tipo === 'Conta Investimento') {
+                    if (confirm(`Você alterou o nome da instituição de "${nomeAntigoBanco}" para "${bancoNome}".\n\nDeseja atualizar também todos os registros históricos (Notas, Proventos, Posição Inicial, Renda Fixa) para o novo nome?\n\nIsso garantirá que seu histórico de custódia seja migrado corretamente.`)) {
+                        await migrarDadosCorretora(nomeAntigoBanco, bancoNome);
+                    }
+                }
+
+            } else { // Moeda estrangeira
+                const nomeAtivo = document.getElementById('conta-nome-ativo').value;
+                if (!nomeAtivo) { alert('O nome da conta/ativo é obrigatório.'); return; }
+                
+                const ativoMoeda = {
+                    id: id ? parseFloat(id) : Date.now(),
+                    nomeAtivo: nomeAtivo,
+                    moeda: moeda,
+                    descricao: '',
+                    saldoInicial: parseDecimal(document.getElementById('conta-saldo-inicial').value),
+                    dataSaldoInicial: document.getElementById('conta-data-saldo-inicial').value,
+                    notas: document.getElementById('conta-notas').value
+                };
+
+                let index = -1;
+                if(id) index = todosOsAtivosMoedas.findIndex(a => String(a.id) === String(id));
+
+                if (index > -1) {
+                    todosOsAtivosMoedas[index] = ativoMoeda;
+                } else {
+                    todosOsAtivosMoedas.push(ativoMoeda);
+                }
+                
+                if (tipoOriginal === 'conta' && id) {
+                    todasAsContas = todasAsContas.filter(c => String(c.id) !== String(id));
+                    await salvarContas(); 
+                }
+                
+                await salvarAtivosMoedas();
             }
-            savePromise = salvarContas();
-
-        } else { // Moeda estrangeira
-            const nomeAtivo = document.getElementById('conta-nome-ativo').value;
-            if (!nomeAtivo) { alert('O nome da conta/ativo é obrigatório.'); return; }
             
-            const ativoMoeda = {
-                id: id ? parseFloat(id) : Date.now(),
-                nomeAtivo: nomeAtivo,
-                moeda: moeda,
-                descricao: '',
-                saldoInicial: parseDecimal(document.getElementById('conta-saldo-inicial').value),
-                dataSaldoInicial: document.getElementById('conta-data-saldo-inicial').value,
-                notas: document.getElementById('conta-notas').value
-            };
-
-            let index = -1;
-            if(id) index = todosOsAtivosMoedas.findIndex(a => String(a.id) === String(id));
-
-            if (index > -1) {
-                todosOsAtivosMoedas[index] = ativoMoeda;
-            } else {
-                todosOsAtivosMoedas.push(ativoMoeda);
-            }
-            
-            if (tipoOriginal === 'conta' && id) {
-                todasAsContas = todasAsContas.filter(c => String(c.id) !== String(id));
-                salvarContas(); // Salva a remoção da conta antiga
-            }
-            
-            savePromise = salvarAtivosMoedas();
-        }
-        
-        savePromise.then(() => {
             renderizarTabelaContas();
             if(telas.caixaGlobal.style.display === 'block'){ renderizarTelaCaixaGlobal(true); }
             fecharModal('modal-cadastro-conta');
-        });
+
+        } catch (error) {
+            console.error("Erro ao salvar conta:", error);
+            alert("Erro ao salvar conta.");
+        } finally {
+            saveButton.innerHTML = originalButtonText;
+            saveButton.disabled = false;
+        }
     });
-    document.getElementById('conta-banco').addEventListener('change', (e) => { document.getElementById('container-outro-banco').style.display = e.target.value === 'Outro' ? 'block' : 'none'; });
+    document.getElementById('conta-banco').addEventListener('change', (e) => { 
+        const isAdicionar = e.target.value === 'Adicionar';
+        document.getElementById('container-outro-banco').style.display = isAdicionar ? 'block' : 'none'; 
+        if (isAdicionar) {
+            document.getElementById('conta-outro-banco').value = ''; // Limpa o campo
+            document.getElementById('conta-outro-banco').focus();
+        }
+    });
     document.getElementById('conta-banco').dispatchEvent(new Event('change'));
     document.getElementById('conta-tipo').addEventListener('change', (e) => { document.getElementById('conta-pix').disabled = (e.target.value !== 'Conta Corrente'); });
     document.getElementById('conta-tipo').dispatchEvent(new Event('change'));
@@ -1647,6 +1717,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             header.closest('.conta-coluna').classList.toggle('minimized');
         }
     });
+    document.getElementById('titulo-tela-rv').addEventListener('click', () => {
+        abrirModalGraficoCotacoesHistoricas('todos');
+    });
     document.getElementById('rv-filtro-corretora').addEventListener('change', renderizarTelaRendaVariavel);
     document.getElementById('rv-filtro-data').addEventListener('change', renderizarTelaRendaVariavel);
     document.getElementById('info-buttons-rv').addEventListener('click', (e) => {
@@ -1662,6 +1735,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             abrirModalBalanceamento('Renda Variável');
         }
     });
+    // Delegação para abrir gráficos ao clicar nos títulos das tabelas (que são dinâmicos)
+    const containerRV = document.getElementById('posicao-rv-container');
+    if (containerRV) {
+        containerRV.addEventListener('click', function(e) {
+            // Procura se o clique foi dentro de um elemento com a classe 'titulo-clicavel-grafico'
+            const headerClicavel = e.target.closest('.titulo-clicavel-grafico');
+            
+            if (headerClicavel) {
+                const tipo = headerClicavel.dataset.tipoAtivo;
+                // Chama a função existente (ajuste o nome se for diferente no seu sistema)
+                abrirModalGraficoCotacoesHistoricas(tipo); 
+            }
+        });
+    }
     document.getElementById('calendario-geral-filtro-corretora').addEventListener('change', renderizarCalendarioGeral);
     document.getElementById('titulo-calendario-geral').addEventListener('click', abrirModalProventosAnuais);
     document.querySelectorAll('.cotacao-moeda-input').forEach(input => {
@@ -1816,16 +1903,30 @@ document.addEventListener('DOMContentLoaded', async () => {
                 row.querySelectorAll('.edit-field').forEach(input => {
                     const field = input.dataset.field;
                     let value = input.value;
+                    
                     if (field === 'ticker') value = value.toUpperCase();
                     if (field === 'cnpj') value = value.replace(/\D/g, '');
+                    
                     if (field === 'metaYieldBazin') {
                         value = parseDecimal(value) / 100;
-                        if(ativo.tipo !== 'Ação') return;
+                        if(ativo.tipo !== 'Ação') return; // Não salva yield se não for ação
                     }
+
                     ativo[field] = value;
                 });
+
+                // --- LIMPEZA DE DADOS (Sanitização) ---
+                // Se o ativo deixou de ser FII (ou nunca foi), remove o subtipo para evitar lixo
+                if (ativo.tipo !== 'FII') {
+                    ativo.subtipoFii = null;
+                }
+                // Se o ativo não é Ação, zera a meta Bazin
+                if (ativo.tipo !== 'Ação') {
+                    ativo.metaYieldBazin = 0; // ou null, conforme sua preferência
+                }
             }
         });
+        
         salvarAtivos();
         isAtivosEditMode = false;
         document.getElementById('botoes-ativos-padrao').style.display = 'flex';
@@ -1895,6 +1996,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('provento-filtro-tipo').addEventListener('change', renderizarTabelaProventos);
     document.getElementById('provento-filtro-status').addEventListener('change', renderizarTabelaProventos);
     document.getElementById('provento-filtro-posicao').addEventListener('change', renderizarTabelaProventos);
+    document.getElementById('provento-filtro-data-tipo').addEventListener('change', renderizarTabelaProventos);
     document.getElementById('btn-adicionar-proventos-massa').addEventListener('click', () => { mostrarTela('proventosMassa'); renderizarTelaProventosMassa(); });
     const btnAddLinhasProvento = document.getElementById('btn-add-5-linhas-provento');
     if (btnAddLinhasProvento) {
@@ -2394,41 +2496,125 @@ document.addEventListener('DOMContentLoaded', async () => {
             header.classList.toggle('ativo');
         }
     });
-    // --- INICIALIZAÇÃO OFFLINE (Substitui a lógica de autenticação) ---
+// --- INÍCIO: NOVA LÓGICA DE AUTENTICAÇÃO E FLUXO DA APLICAÇÃO (OTIMIZADA) ---
+    const auth = window.auth;
+    const { 
+        onAuthStateChanged, 
+        createUserWithEmailAndPassword, 
+        signInWithEmailAndPassword, 
+        signOut 
+    } = window.authFunctions;
     
-    // Carrega os dados imediatamente ao iniciar
-    carregarTodosOsDados().then(() => {
-        renderizarInfoBackup();
-        
-        if (autoUpdateEnabled) {
-            iniciarAutoUpdate();
-        }
-
-        // Configura a interface para modo logado/ativo
-        mainContent.style.display = 'block';
-        sidebar.style.display = 'flex';
-        
-        // Esconde elementos de login que não serão usados
-        const loginForm = document.getElementById('sidebar-login-form');
-        const userInfo = document.getElementById('user-info');
-        if (loginForm) loginForm.style.display = 'none';
-        if (userInfo) userInfo.style.display = 'none';
-
-        // Remove o overlay de carregamento
-        const loading = document.getElementById('loading-overlay');
-        if (loading) loading.style.display = 'none';
-
-        renderizarDashboard();
-        mostrarTela('dashboard');
-    });
-
-    // Remove listener de logout pois não há sessão
-    const btnLogout = document.getElementById('btn-logout');
-    if (btnLogout) {
-        btnLogout.style.display = 'none';
+    // Listener para filtro de notas em tempo real
+    const inputFiltroNotas = document.getElementById('filtro-nota-ativo');
+    if (inputFiltroNotas) {
+        inputFiltroNotas.addEventListener('input', renderizarListaNotas);
     }
     
-    // --- FIM DA INICIALIZAÇÃO OFFLINE ---
+    // Referências aos novos elementos da interface
+    const sidebarLoginForm = document.getElementById('sidebar-login-form');
+    const userInfoDisplay = document.getElementById('user-info');
+    const userEmailSpan = document.getElementById('user-email');
+    const authError = document.getElementById('auth-error');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    
+    // O OBSERVADOR PRINCIPAL DA APLICAÇÃO
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            // --- MODO ONLINE (USUÁRIO LOGADO) ---
+            console.log("Usuário autenticado. Iniciando modo ONLINE (Fonte de verdade: Nuvem).");
+            currentUser = user;
+            
+            // Exibe loading enquanto conecta e baixa os dados reais
+            loadingOverlay.style.display = 'flex';
+
+            const { doc, getDoc } = window.dbFunctions;
+
+            // 1. Busca o idCasaAssociada (Metadados do usuário)
+            try {
+                const userProfileRef = doc(window.db, "Usuarios", user.uid);
+                const userProfileSnap = await getDoc(userProfileRef);
+                if (userProfileSnap.exists() && userProfileSnap.data().idCasaAssociada) {
+                    idCasaAssociada = userProfileSnap.data().idCasaAssociada;
+                    console.log("Integração ativada. ID da Casa associada:", idCasaAssociada);
+                } else {
+                    idCasaAssociada = null;
+                    console.log("Usuário não tem casa associada. Integração desativada.");
+                }
+            } catch (error) {
+                console.error("Erro ao buscar perfil do usuário para integração:", error);
+                idCasaAssociada = null;
+            }
+
+            // 2. Inicia o listener
+            // Ele vai baixar os dados, atualizar as variáveis,
+            // verificar o autoUpdate e remover o loadingOverlay.
+            iniciarListenerDaCarteira(); 
+
+            mainContent.style.display = 'block';
+            sidebar.style.display = 'flex';
+            sidebarLoginForm.style.display = 'none';
+            userEmailSpan.textContent = user.email;
+            userInfoDisplay.style.display = 'block';
+
+            // Nota: Não chamamos renderizarDashboard() aqui manualmente. 
+            // O listener chamará assim que os dados estiverem prontos.
+            mostrarTela('dashboard');
+
+        } else {
+            // --- MODO OFFLINE (DESLOGADO OU PRIMEIRO ACESSO) ---
+            console.log("Sem usuário. Iniciando modo OFFLINE (Fonte de verdade: LocalStorage).");
+            currentUser = null;
+            idCasaAssociada = null; // Limpa a associação da casa
+            
+            if (unsubcribeFirestoreListener) {
+                unsubcribeFirestoreListener(); 
+                unsubcribeFirestoreListener = null;
+            }
+            pararAutoUpdate();
+            
+            // --- GATILHO DA VERSÃO DEMO ---
+            // Substitua 'SUA-URL-AQUI' por um pedaço do seu link Netlify (ex: 'meu-portfolio-demo.netlify.app')
+            const isDemoURL = window.location.hostname.includes('investments-demo.netlify.app') || window.location.search.includes('demo=true');
+            const userLoggedOutManually = localStorage.getItem('demoLoggedOut') === 'true';
+
+            if (isDemoURL && !userLoggedOutManually) {
+                console.log("Iniciando ambiente de demonstração automatizado...");
+                loadingOverlay.style.display = 'flex';
+                
+                try {
+                    // Força o idioma para Inglês
+                    if (typeof changeLanguage === 'function') {
+                        changeLanguage('en-GB');
+                    }
+                    
+                    // Faz o login automático com os dados fictícios
+                    await signInWithEmailAndPassword(auth, 'demo@gmail.com', '123456');
+                    
+                    // O return interrompe aqui, pois o onAuthStateChanged será 
+                    // disparado novamente assim que o login acima concluir.
+                    return; 
+                } catch (error) {
+                    console.error("Erro ao iniciar conta de demonstração:", error);
+                    loadingOverlay.style.display = 'none';
+                }
+            }
+            // ------------------------------
+
+            // Carrega os dados do localStorage (Ambiente de Teste)
+            await carregarDadosDoLocalStorage();
+            
+            mainContent.style.display = 'block';
+            sidebar.style.display = 'flex';
+            userInfoDisplay.style.display = 'none';
+            sidebarLoginForm.style.display = 'block';
+            
+            renderizarDashboard();
+            mostrarTela('dashboard');
+            loadingOverlay.style.display = 'none'; // Garante que o loading saia no modo offline
+        }
+    });
+
     // --- LISTENERS DOS GRÁFICOS (CORREÇÃO DEFINITIVA) ---
 
     // 1. Proteção Geral: Impede que cliques nos controles fechem qualquer modal
@@ -2454,18 +2640,78 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    // 3. Lógica do Dashboard (Isso estava faltando no seu arquivo)
+    // 3. Lógica do Dashboard
     const radiosPeriodoDash = document.querySelectorAll('input[name="periodo-desempenho-dash"]');
     radiosPeriodoDash.forEach(radio => {
         radio.addEventListener('change', (e) => {
+            // Ativa o escudo para bloquear interferência EXTERNA
+            window.lastChartInteractionTime = Date.now();
+
             const novoPeriodo = e.target.value;
             
             if (!configuracoesGraficos.desempenho) configuracoesGraficos.desempenho = {};
             configuracoesGraficos.desempenho.periodo = novoPeriodo;
             salvarConfiguracoesGraficos();
             
-            renderizarGraficoDesempenho();
+            // Chama a função passando TRUE para dizer: "Eu sou o usuário, pode atualizar agora!"
+            renderizarGraficoDesempenho(true);
         });
+    });
+    // Listener para o formulário (agora na sidebar)
+    document.getElementById('login-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const action = e.submitter.id;
+
+        authError.textContent = '';
+
+        if (action === 'btn-login') {
+            signInWithEmailAndPassword(auth, email, password)
+                .catch(error => {
+                    console.error("Erro de login:", error);
+                    authError.textContent = 'Email ou senha inválidos.';
+                });
+        } else if (action === 'btn-signup') {
+            if (!email || password.length < 6) {
+                authError.textContent = 'Email válido e senha de 6+ caracteres são necessários.';
+                return;
+            }
+            createUserWithEmailAndPassword(auth, email, password)
+                .catch(error => {
+                    console.error("Erro ao criar conta:", error);
+                    authError.textContent = error.code === 'auth/email-already-in-use' ? 'Este email já está em uso.' : 'Erro ao criar a conta.';
+                });
+        }
+    });
+
+    // Listener para o botão de logout
+    document.getElementById('btn-logout').addEventListener('click', () => {
+        if (confirm('Deseja realmente sair? Seus dados locais serão limpos para garantir sua privacidade.')) {
+            // --- GATILHO DA VERSÃO DEMO ---
+            // Marca que o usuário deslogou manualmente para evitar loop de login na Demo
+            localStorage.setItem('demoLoggedOut', 'true');
+            
+            limparDadosLocais();
+            signOut(auth);
+        }
+    });
+
+    window.addEventListener('click', function(event) {
+        const modal = document.getElementById('modal-comparacao-snapshots');
+        // Verifica se o elemento clicado é o próprio fundo do modal (overlay)
+        if (event.target === modal) {
+            fecharModalComparacao();
+        }
+    });
+
+    // 2. Fechar ao pressionar a tecla ESC
+    window.addEventListener('keydown', function(event) {
+        const modal = document.getElementById('modal-comparacao-snapshots');
+        // Só aciona se a tecla for ESC e se este modal específico estiver visível
+        if (event.key === 'Escape' && modal && modal.style.display === 'block') {
+            fecharModalComparacao();
+        }
     });
 
     // --- INÍCIO: SINCRONIZAÇÃO AUTOMÁTICA ENTRE ABAS (VERSÃO COMPLETA) ---
@@ -2532,27 +2778,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         const input = event.target;
         const expression = input.value;
 
-        // Verifica se há operadores matemáticos
+        // Verifica se há operadores matemáticos para justificar um cálculo
         if (!/[\+\-\*\/]/.test(expression)) return;
 
-        event.preventDefault(); 
+        event.preventDefault(); // Impede o envio do formulário
 
         try {
-            // Removemos a substituição de vírgula por ponto, pois o input já deve estar com ponto
-            const sanitizedExpression = expression.replace(/[^\d\.\+\-\*\/]/g, '');
+            const sanitizedExpression = expression.replace(/,/g, '.').replace(/[^\d\.\+\-\*\/]/g, '');
             const result = new Function('return ' + sanitizedExpression)();
             
             if (isNaN(result) || !isFinite(result)) {
-                throw new Error('Invalid calculation');
+                throw new Error('Cálculo inválido');
             }
 
             input.value = formatarDecimalParaInput(result);
+            // Dispara um evento de 'change' para que outras partes do sistema (como a atualização de totais da nota) sejam acionadas
             input.dispatchEvent(new Event('change', { bubbles: true }));
 
         } catch (error) {
-            console.error("Inline calculation error:", error);
-            alert("The entered mathematical expression is invalid.");
-            input.focus(); 
+            console.error("Erro no cálculo inline:", error);
+            alert("A expressão matemática digitada é inválida.");
+            input.focus(); // Deixa o foco no campo para correção
         }
     };
 
@@ -2564,18 +2810,68 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     // --- FIM: LÓGICA PARA CÁLCULO INLINE ---
     // Ativa a formatação de moeda para os campos de valor das notas
+    // --- LÓGICA PARA PREENCHIMENTO AUTOMÁTICO DA ALÍQUOTA DE IR (MODAL INDIVIDUAL) ---
+    // Substitua o bloco anterior por este:
+    const inputTickerProvento = document.getElementById('provento-ativo');
+    const inputTipoProvento = document.getElementById('provento-tipo');
+    const inputAliquotaIR = document.getElementById('provento-ir'); // Campo de %
+    const inputIdProvento = document.getElementById('provento-id');
+    // Listener para o novo filtro de Instituição da Renda Fixa
+    const filtroInstRF = document.getElementById('rf-filtro-instituicao');
+    if (filtroInstRF) {
+        filtroInstRF.addEventListener('change', renderizarPosicaoRF);
+    }
+    const sugerirAliquotaIR = () => {
+        // 1. Bloqueios de segurança:
+        // Se estiver editando um provento existente, NÃO muda automaticamente para não perder histórico.
+        if (typeof isProventosEditMode !== 'undefined' && isProventosEditMode) return;
+        if (inputIdProvento && inputIdProvento.value) return; 
+
+        const ticker = inputTickerProvento.value.toUpperCase();
+        const tipoEvento = inputTipoProvento.value;
+
+        // Precisamos encontrar o ativo para saber se é FII
+        const ativo = todosOsAtivos.find(a => a.ticker === ticker);
+
+        // Só sugerimos se tivermos Ticker válido (cadastrado) e Tipo selecionado
+        if (ativo && tipoEvento) {
+            const ehFII = (ativo.tipo === 'FII' || ativo.tipo === 'Fundo Imobiliário');
+            let aliquotaSugerida = 0;
+
+            switch (tipoEvento) {
+                case 'Rendimento':
+                    // Se for FII, usa alíquota de FIIs, se não, usa Rendimento Geral
+                    aliquotaSugerida = ehFII ? configuracoesFiscais.aliquotaRendimentosFIIs : configuracoesFiscais.aliquotaRendimentosGeral;
+                    break;
+                case 'Dividendo':
+                    aliquotaSugerida = configuracoesFiscais.aliquotaDividendosGeral;
+                    break;
+                case 'JCP':
+                    aliquotaSugerida = configuracoesFiscais.aliquotaJCPGeral;
+                    break;
+                case 'Bonificação':
+                    aliquotaSugerida = configuracoesFiscais.aliquotaBonificacoesGeral;
+                    break;
+                default:
+                    aliquotaSugerida = 0;
+            }
+
+            // O campo espera o valor formatado (ex: 15,00 para 15%)
+            // Multiplicamos por 100 pois no config salvamos 0.15
+            inputAliquotaIR.value = formatarDecimal(aliquotaSugerida * 100);
+        }
+    };
+
+    if (inputTickerProvento && inputTipoProvento && inputAliquotaIR) {
+        // 'input': Dispara enquanto você digita (para reagir assim que o ticker for válido)
+        inputTickerProvento.addEventListener('input', sugerirAliquotaIR);
+        // 'change': Dispara ao selecionar uma opção do datalist ou sair do campo
+        inputTickerProvento.addEventListener('change', sugerirAliquotaIR);
+        // 'change': Dispara ao trocar o tipo no dropdown
+        inputTipoProvento.addEventListener('change', sugerirAliquotaIR);
+    }
+    // --- FIM DA LÓGICA DE ALÍQUOTA AUTOMÁTICA ---
 });
-
-
-
-
-
-
-
-
-
-
-
 
 
 

@@ -1,123 +1,7 @@
-function registrarAlteracao() {
-    alteracoesDesdeUltimoBackup++;
-    localStorage.setItem('carteira_alteracoes_pendentes', alteracoesDesdeUltimoBackup);
-    verificarStatusBackup();
-}
-
-function abrirModalInvestimentosDetalhes() {
-    const container = document.getElementById('modal-investimentos-detalhes-conteudo');
-    container.innerHTML = '<h4><i class="fas fa-spinner fa-spin"></i> Calculating positions...</h4>';
-
-    const agora = new Date();
-    const dataFormatada = agora.toLocaleDateString('en-GB');
-    const horaFormatada = agora.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const timestampCompleto = `Position on ${dataFormatada} at ${horaFormatada}`;
-    document.getElementById('print-timestamp').textContent = timestampCompleto;
-
-    abrirModal('modal-investimentos-detalhes');
-
-    setTimeout(() => {
-        const hoje = new Date().toISOString().split('T')[0];
-        const posicoesRV = gerarPosicaoDetalhada(hoje);
-        const ativosRFAtivos = todosOsAtivosRF.filter(a => !(a.descricao || '').toLowerCase().includes('inactive'));
-
-        const dadosAgrupados = {
-            'FIIs': [],
-            'Ações': [],
-            'ETFs': [],
-            'Renda Fixa': []
-        };
-
-        for (const ticker in posicoesRV) {
-            const posicao = posicoesRV[ticker];
-            if (posicao.quantidade > 0.000001) {
-                const ativoInfo = todosOsAtivos.find(a => a.ticker === ticker);
-                if (ativoInfo && ativoInfo.tipo) {
-                    const tipoMapeado = ativoInfo.tipo === 'Ação' ? 'Ações' : ativoInfo.tipo === 'FII' ? 'FIIs' : ativoInfo.tipo;
-                    const cotacao = dadosDeMercado.cotacoes[ticker] || {};
-                    const precoAtual = cotacao.valor || 0;
-                    
-                    if (dadosAgrupados[tipoMapeado]) {
-                        dadosAgrupados[tipoMapeado].push({
-                            ticker: ticker,
-                            quantidade: posicao.quantidade,
-                            precoAtual: precoAtual,
-                            valorDeMercado: posicao.quantidade * precoAtual
-                        });
-                    }
-                }
-            }
-        }
-
-        ativosRFAtivos.forEach(ativo => {
-            const saldo = calcularSaldosRFEmData(ativo, hoje).saldoLiquido;
-            if (saldo > 0.01) {
-                dadosAgrupados['Renda Fixa'].push({
-                    descricao: ativo.descricao,
-                    saldoLiquido: saldo
-                });
-            }
-        });
-
-        let htmlModal = '';
-        let totalGeral = 0;
-        const ordemCategorias = ['FIIs', 'Ações', 'ETFs', 'Renda Fixa'];
-
-        ordemCategorias.forEach(categoria => {
-            const ativos = dadosAgrupados[categoria];
-            if (ativos.length > 0) {
-                let subtotalCategoria = 0;
-                let cabecalhoTabela = '';
-                let corpoTabela = '';
-
-                if (categoria === 'Renda Fixa') {
-                    htmlModal += `<h4>Fixed Income</h4>`;
-                    cabecalhoTabela = '<tr><th>Asset</th><th class="numero">Current Net Balance</th></tr>';
-                    ativos.sort((a, b) => a.descricao.localeCompare(b.descricao));
-                    ativos.forEach(ativo => {
-                        corpoTabela += `<tr><td>${ativo.descricao}</td><td class="numero">${formatarMoeda(ativo.saldoLiquido)}</td></tr>`;
-                        subtotalCategoria += ativo.saldoLiquido;
-                    });
-                } else {
-                    let tituloCategoria = categoria;
-                    if (categoria === 'Ações') tituloCategoria = 'Shares';
-                    htmlModal += `<h4>${tituloCategoria}</h4>`;
-                    cabecalhoTabela = '<tr><th>Asset</th><th class="numero">Quantity</th><th class="numero">Market Price</th><th class="numero">Total Value</th></tr>';
-                    ativos.sort((a, b) => b.valorDeMercado - a.valorDeMercado);
-                    ativos.forEach(ativo => {
-                        corpoTabela += `<tr>
-                            <td>${ativo.ticker}</td>
-                            <td class="numero">${Math.round(ativo.quantidade)}</td>
-                            <td class="numero">${formatarMoeda(ativo.precoAtual)}</td>
-                            <td class="numero">${formatarMoeda(ativo.valorDeMercado)}</td>
-                        </tr>`;
-                        subtotalCategoria += ativo.valorDeMercado;
-                    });
-                }
-
-                let tituloSubtotal = categoria;
-                if (categoria === 'Renda Fixa') tituloSubtotal = 'Fixed Income';
-                if (categoria === 'Ações') tituloSubtotal = 'Shares';
-
-                htmlModal += `<table><thead>${cabecalhoTabela}</thead><tbody>${corpoTabela}</tbody>
-                    <tfoot><tr>
-                        <td colspan="${categoria === 'Renda Fixa' ? 1 : 3}" style="text-align: right;"><strong>Subtotal ${tituloSubtotal}:</strong></td>
-                        <td class="numero"><strong>${formatarMoeda(subtotalCategoria)}</strong></td>
-                    </tr></tfoot>
-                </table>`;
-                totalGeral += subtotalCategoria;
-            }
-        });
-
-        htmlModal += `<h3 id="modal-investimentos-detalhes-total-geral">Total Amount Invested: ${formatarMoeda(totalGeral)}</h3>`;
-        container.innerHTML = htmlModal;
-
-    }, 50);
-}
-
+// Tables and Various Screens // Tabelas e Telas Gerais
 function renderizarTelaPerformanceRV() {
     const container = document.getElementById('container-tabela-performance');
-    container.innerHTML = '<h4><i class="fas fa-spinner fa-spin"></i> Calculating performance for all investment cycles...</h4>';
+    container.innerHTML = '<h4><i class="fas fa-spinner fa-spin"></i> Calculando performance de todos os ciclos de investimento...</h4>';
 
     setTimeout(() => {
         const filtroTipo = document.getElementById('performance-filtro-tipo').value;
@@ -166,8 +50,8 @@ function renderizarTelaPerformanceRV() {
             const yieldSobreVP = (vp > 0 && projecaoAnual > 0) ? projecaoAnual / vp : 0;
 
             dadosParaTabela.push({
-                ticker: ticker, tipo: ativoInfo.tipo === 'Ação' ? 'Share' : ativoInfo.tipo, status: 'In Portfolio',
-                periodo: `${new Date(dataInicioCiclo + 'T12:00:00').toLocaleDateString('en-GB')} - Present`,
+                ticker: ticker, tipo: ativoInfo.tipo, status: 'Em Carteira',
+                periodo: `${new Date(dataInicioCiclo + 'T12:00:00').toLocaleDateString('pt-BR')} - Atual`,
                 quantidade: posicao.quantidade, precoMedio: posicao.precoMedio, custoTotal: custoTotal, valorDeMercado: valorDeMercado,
                 variacaoNaoRealizada, variacaoPercentual, resultadoRealizado, proventosRecebidos, retornoTotal, tir,
                 yocProjetado: posicao.precoMedio > 0 ? projecaoAnual / posicao.precoMedio : 0,
@@ -205,8 +89,8 @@ function renderizarTelaPerformanceRV() {
             const tir = calcularTIR(fluxosFiltrados, datasFiltradas);
             
             dadosParaTabela.push({
-                ticker: ciclo.ticker, tipo: ativoInfo.tipo === 'Ação' ? 'Share' : ativoInfo.tipo, status: 'Zeroed',
-                periodo: `${new Date(ciclo.dataInicio + 'T12:00:00').toLocaleDateString('en-GB')} - ${new Date(ciclo.dataEncerramento + 'T12:00:00').toLocaleDateString('en-GB')}`,
+                ticker: ciclo.ticker, tipo: ativoInfo.tipo, status: 'Zerado',
+                periodo: `${new Date(ciclo.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR')} - ${new Date(ciclo.dataEncerramento + 'T12:00:00').toLocaleDateString('pt-BR')}`,
                 quantidade: 0, precoMedio: 0, custoTotal: custoTotalCiclo, valorDeMercado: valorTotalVendas,
                 variacaoNaoRealizada: 0, variacaoPercentual: 0, resultadoRealizado, proventosRecebidos, retornoTotal, tir,
                 yocProjetado: 0, dyProjetado: 0, pl: 0, pvp: 0,
@@ -215,9 +99,9 @@ function renderizarTelaPerformanceRV() {
         });
         
         if (filtroPeriodo === 'atuais') {
-            dadosParaTabela = dadosParaTabela.filter(d => d.status === 'In Portfolio');
+            dadosParaTabela = dadosParaTabela.filter(d => d.status === 'Em Carteira');
         } else if (filtroPeriodo === 'encerrados') {
-            dadosParaTabela = dadosParaTabela.filter(d => d.status === 'Zeroed');
+            dadosParaTabela = dadosParaTabela.filter(d => d.status === 'Zerado');
         }
 
         const sortKey = sortConfigPerformanceRV.key;
@@ -231,43 +115,47 @@ function renderizarTelaPerformanceRV() {
             return (valA - valB) * sortDirection;
         });
 
+        // --- INÍCIO DA ALTERAÇÃO TAREFA 1: Ajuste de Cabeçalhos ---
         const headers = `
             <tr>
-                <th rowspan="2" class="sortable" data-key="ticker">Asset</th>
-                <th rowspan="2" class="sortable" data-key="periodo">Period</th>
-                <th colspan="4" class="group-header group-1">Portfolio Position</th>
-                <th colspan="4" class="group-header group-2">Personal Performance</th>
-                <th colspan="5" class="group-header group-3">Market Indicators</th> 
+                <th rowspan="2" class="sortable" data-key="ticker">Ativo</th>
+                <th rowspan="2" class="sortable" data-key="periodo">Período</th>
+                <th colspan="4" class="group-header group-1">Posição na Carteira</th>
+                <th colspan="4" class="group-header group-2">Performance Pessoal</th>
+                <th colspan="5" class="group-header group-3">Indicadores de Mercado</th> 
             </tr>
             <tr>
-                <th class="numero sortable group-1" data-key="quantidade">Qty</th>
-                <th class="numero sortable group-1" data-key="precoMedio">Avg Price</th>
-                <th class="numero sortable group-1" data-key="custoTotal">Total Cost</th>
-                <th class="numero sortable group-1" data-key="valorDeMercado">Market Value / Final</th>
-                <th class="numero sortable group-2" data-key="resultadoRealizado">Var. / Result</th>
-                <th class="numero sortable group-2" data-key="proventosRecebidos">Income</th>
-                <th class="numero sortable group-2 col-retorno-total" data-key="retornoTotal">Total Return</th>
-                <th class="percentual sortable group-2" data-key="tir">Ann. IRR</th>
-                <th class="percentual sortable group-3" data-key="yocProjetado">Proj. YoC</th>
-                <th class="percentual sortable group-3" data-key="dyProjetado">Proj. DY</th>
-                <th class="numero sortable group-3" data-key="pvp">P/BV</th>
-                <th class="numero sortable group-3" data-key="pl">P/E</th> 
-                <th class="percentual sortable group-3" data-key="yieldSobreVP">Yield on BV</th>
+                <th class="numero sortable group-1" data-key="quantidade">Qtd.</th>
+                <th class="numero sortable group-1" data-key="precoMedio">Preço Médio</th>
+                <th class="numero sortable group-1" data-key="custoTotal">Custo Total</th>
+                <th class="numero sortable group-1" data-key="valorDeMercado">Valor Mercado / Final</th>
+                <th class="numero sortable group-2" data-key="resultadoRealizado">Variação / Result.</th>
+                <th class="numero sortable group-2" data-key="proventosRecebidos">Proventos</th>
+                <th class="numero sortable group-2 col-retorno-total" data-key="retornoTotal">Retorno Total</th>
+                <th class="percentual sortable group-2" data-key="tir">TIR Anual</th>
+                <th class="percentual sortable group-3" data-key="yocProjetado">YoC Proj.</th>
+                <th class="percentual sortable group-3" data-key="dyProjetado">DY Proj.</th>
+                <th class="numero sortable group-3" data-key="pvp">P/VP</th>
+                <th class="numero sortable group-3" data-key="pl">P/L</th> 
+                <th class="percentual sortable group-3" data-key="yieldSobreVP">Yield s/VP</th>
             </tr>`;
+        // --- FIM DA ALTERAÇÃO TAREFA 1 ---
 
         let corpoTabela = '';
         dadosParaTabela.forEach(d => {
-            const isEmCarteira = d.status === 'In Portfolio';
+            const isEmCarteira = d.status === 'Em Carteira';
             const valorPrincipalVariacao = isEmCarteira ? d.variacaoNaoRealizada : d.resultadoRealizado;
             const percentualVariacao = d.custoTotal > 0 ? valorPrincipalVariacao / d.custoTotal : 0;
-            const labelVariacao = isEmCarteira ? 'Variation (Unrealized)' : 'Realized Result';
+            const labelVariacao = isEmCarteira ? 'Variação (Não Realizada)' : 'Resultado Realizado';
 
             const classeRetorno = d.retornoTotal >= 0 ? 'valor-positivo' : 'valor-negativo';
             const classeVariacao = valorPrincipalVariacao >= 0 ? 'valor-positivo' : 'valor-negativo';
             const classeTir = d.tir >= 0 ? 'valor-positivo' : 'valor-negativo';
             
+            // --- INÍCIO DA ALTERAÇÃO TAREFA 1: Separação P/VP e P/L ---
             const pvpFormatado = (d.pvp > 0 && isEmCarteira) ? formatarDecimal(d.pvp) : 'N/A';
-            const plFormatado = (d.tipo === 'Share' && d.pl > 0 && isEmCarteira) ? formatarDecimal(d.pl) : 'N/A';
+            const plFormatado = (d.tipo === 'Ação' && d.pl > 0 && isEmCarteira) ? formatarDecimal(d.pl) : 'N/A';
+            // --- FIM DA ALTERAÇÃO TAREFA 1 ---
 
             corpoTabela += `<tr class="row-clickable" data-ticker="${d.ticker}" data-custo-total="${d.custoTotal}" data-proventos="${d.proventosRecebidos}" data-realizado="${d.resultadoRealizado}">
                 <td><strong>${d.ticker}</strong><small style="display: block;">${d.tipo} / ${d.status}</small></td>
@@ -303,154 +191,6 @@ function renderizarTelaPerformanceRV() {
         });
 
     }, 50);
-}
-function abrirModalGraficoBreakEven(ticker, custoTotal, proventosRecebidos, resultadoRealizado) {
-    if (custoTotal <= 0) {
-        alert(`Cannot generate the chart for ${ticker} because the total cost is zero or negative.`);
-        return;
-    }
-
-    const modal = document.getElementById('modal-performance-ativo-grafico');
-    const tituloModal = document.getElementById('modal-performance-ativo-titulo');
-    const infoModal = document.getElementById('modal-performance-ativo-info');
-    const ctx = document.getElementById('grafico-comparativo-preco').getContext('2d');
-
-    const totalRetornado = proventosRecebidos + resultadoRealizado;
-    const valorRestante = Math.max(0, custoTotal - totalRetornado);
-    const percentualPago = (totalRetornado / custoTotal);
-
-    const percProventos = (proventosRecebidos / custoTotal) * 100;
-    const percRealizado = (resultadoRealizado / custoTotal) * 100;
-    const percRestante = (valorRestante / custoTotal) * 100;
-
-    tituloModal.textContent = `Break-Even Point - ${ticker}`;
-    infoModal.innerHTML = `Payback progress: <strong class="${percentualPago >= 1 ? 'valor-positivo' : ''}">${formatarPercentual(percentualPago)}</strong>`;
-
-    if (graficoBreakEvenInstance) {
-        graficoBreakEvenInstance.destroy();
-    }
-    
-    graficoBreakEvenInstance = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: [ticker],
-            datasets: [
-                {
-                    label: 'Received Income',
-                    data: [percProventos],
-                    backgroundColor: 'rgba(46, 204, 113, 0.7)', // Verde
-                    borderColor: 'rgba(46, 204, 113, 1)',
-                    borderWidth: 1
-                },
-                {
-                    label: 'Realized Results',
-                    data: [percRealizado],
-                    backgroundColor: 'rgba(52, 152, 219, 0.7)', // Azul
-                    borderColor: 'rgba(52, 152, 219, 1)',
-                    borderWidth: 1
-                },
-                {
-                    label: 'Remaining to Payback',
-                    data: [percRestante],
-                    backgroundColor: 'rgba(149, 165, 166, 0.7)', // Cinza
-                    borderColor: 'rgba(149, 165, 166, 1)',
-                    borderWidth: 1
-                }
-            ]
-        },
-        options: {
-            indexAxis: 'y',
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                title: {
-                    display: true,
-                    text: `Total Cost: ${formatarMoeda(custoTotal)}`
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            const label = context.dataset.label || '';
-                            const perc = context.raw;
-                            const valorAbsoluto = (perc / 100) * custoTotal;
-                            return `${label}: ${formatarMoeda(valorAbsoluto)} (${perc.toFixed(1)}%)`;
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    stacked: true,
-                    max: 100, // Força a escala a ir sempre até 100%
-                    ticks: {
-                        callback: function(value) {
-                            return value + '%'; // Adiciona o símbolo de % no eixo
-                        }
-                    }
-                },
-                y: {
-                    stacked: true
-                }
-            }
-        }
-    });
-
-    abrirModal('modal-performance-ativo-grafico');
-}
-
-
-function verificarStatusBackup() {
-    const backupButtons = document.querySelectorAll('#btn-dashboard-backup, #btn-backup');
-    const footer = document.querySelector('.sidebar-footer');
-    let alertElement = document.getElementById('backup-alert-footer');
-
-    if (alteracoesDesdeUltimoBackup >= BACKUP_PROMPT_THRESHOLD) {
-        if (!alertElement) {
-            alertElement = document.createElement('div');
-            alertElement.id = 'backup-alert-footer';
-            alertElement.className = 'footer-info backup-alerta-ativo';
-            alertElement.innerHTML = '<span><i class="fas fa-exclamation-triangle"></i> Attention: Backup Required</span>';
-            if (footer) {
-                footer.prepend(alertElement);
-            }
-        }
-    } else {
-        if (alertElement) {
-            alertElement.remove();
-        }
-    }
-
-    backupButtons.forEach(btn => {
-        btn.innerHTML = `<i class="fas fa-save"></i> Backup Now`;
-    });
-}
-function toggleSelecaoVenda(ticker) {
-    // Se não estiver definido, assume que estava 'true' (padrão) e vira 'false'
-    if (estadoSelecaoVendas[ticker] === undefined) {
-        estadoSelecaoVendas[ticker] = false;
-    } else {
-        // Inverte o estado atual
-        estadoSelecaoVendas[ticker] = !estadoSelecaoVendas[ticker];
-    }
-    renderizarTelaConsultaBalanceamento();
-}
-function formatarIntervaloDias(totalDias) {
-    if (isNaN(totalDias) || totalDias <= 0) return "-";
-
-    const diasPorMesMedio = 365.25 / 12;
-    
-    const anos = Math.floor(totalDias / 365.25);
-    const diasRestantesAposAnos = totalDias % 365.25;
-    const meses = Math.floor(diasRestantesAposAnos / diasPorMesMedio);
-    const dias = Math.round(diasRestantesAposAnos % diasPorMesMedio);
-
-    let partes = [];
-    if (anos > 0) partes.push(`${anos} ano${anos > 1 ? 's' : ''}`);
-    if (meses > 0) partes.push(`${meses} mes${meses > 1 ? 'es' : ''}`);
-    // Mostra dias se for a única unidade ou se houver anos/meses. Evita mostrar "0 dias" se for exatamente X meses.
-    if (dias > 0 || partes.length === 0) partes.push(`${dias} dia${dias !== 1 ? 's' : ''}`);
-    
-    return partes.join(', ');
 }
 function renderizarResultadoCrescimento(resultados, intervaloValor) {
     const container = document.getElementById('container-resultado-crescimento');
@@ -491,9 +231,6 @@ function renderizarResultadoCrescimento(resultados, intervaloValor) {
     container.innerHTML = tableHtml;
     container.style.display = 'block';
 }
-
-
-
 function renderizarResultadoCrescimentoPorPeriodo(resultados) {
     const container = document.getElementById('container-resultado-crescimento');
     if (!resultados || resultados.length === 0) {
@@ -555,233 +292,44 @@ function renderizarResultadoCrescimentoPorPeriodo(resultados) {
     container.innerHTML = tableHtml;
     container.style.display = 'block';
 }
-function getCorretorasAtivasParaNotas() {
-    const nomesCorretorasAtivas = new Set();
-    const contasInvestimentoAtivas = todasAsContas.filter(conta => {
-        const notas = (conta.notas || '').toLowerCase();
-        const isAtiva = !notas.includes('inativa') && !notas.includes('encerrada');
-        // Filtra especificamente por contas de investimento ativas
-        return conta.tipo === 'Conta Investimento' && isAtiva;
-    });
-
-    contasInvestimentoAtivas.forEach(conta => {
-        if (conta.banco) {
-            nomesCorretorasAtivas.add(conta.banco.trim());
-        }
-    });
-    return [...nomesCorretorasAtivas].sort();
-}
-function getTodasCorretoras() {
-    const nomesInstituicoes = new Set();
-    const contasAtivas = todasAsContas.filter(conta => {
-        const notas = (conta.notas || '').toLowerCase();
-        return !notas.includes('inativa') && !notas.includes('encerrada');
-    });
-    contasAtivas.forEach(conta => {
-        if (conta.banco) {
-            nomesInstituicoes.add(conta.banco.trim());
-        }
-    });
-    todosOsAtivosRF.forEach(ativoRF => {
-        if (ativoRF.instituicao) {
-            nomesInstituicoes.add(ativoRF.instituicao.trim());
-        }
-    });
-    const posicoesRV = gerarPosicaoDetalhada();
-    Object.values(posicoesRV).forEach(posicao => {
-        Object.keys(posicao.porCorretora).forEach(corretora => {
-            nomesInstituicoes.add(corretora.trim());
-        });
-    });
-
-    return [...nomesInstituicoes].sort();
-}
-
-function getTodasInstituicoesAtivas() {
-    const nomesDeBancos = new Set();
-    
-    // Filtra as contas para considerar qualquer tipo, desde que não esteja inativa/encerrada.
-    const contasAtivas = todasAsContas.filter(conta => {
-        const notas = (conta.notas || '').toLowerCase();
-        return !notas.includes('inativa') && !notas.includes('encerrada');
-    });
-
-    contasAtivas.forEach(conta => {
-        if (conta.banco) {
-            nomesDeBancos.add(conta.banco.trim());
-        }
-    });
-
-    return [...nomesDeBancos].sort();
-}
-function getTodasContasAtivas() {
-    return todasAsContas.filter(conta => {
-        const notas = (conta.notas || '').toLowerCase();
-        return !notas.includes('inativa') && !notas.includes('encerrada');
+function renderizarTabelaFeriados() {
+    const container = document.getElementById('lista-de-feriados');
+    container.innerHTML = `<table><thead><tr><th>Data</th><th>Descrição</th><th class="controles-col">Controles</th></tr></thead><tbody></tbody></table>`;
+    const body = container.querySelector('tbody');
+    body.innerHTML = '';
+    if (todosOsFeriados.length === 0) {
+        body.innerHTML = '<tr><td colspan="3" style="text-align:center;">Nenhum feriado cadastrado.</td></tr>';
+        return;
+    }
+    todosOsFeriados.sort((a,b) => new Date(a.data) - new Date(b.data)).forEach(feriado => {
+        const tr = document.createElement('tr');
+        const dataFormatada = new Date(feriado.data + 'T12:00:00').toLocaleDateString('pt-BR');
+        tr.innerHTML = `<td>${dataFormatada}</td><td>${feriado.descricao}</td><td class="controles-col"><i class="fas fa-edit acao-btn edit" title="Editar Feriado" data-feriado-id="${feriado.id}"></i><i class="fas fa-trash acao-btn delete" title="Excluir Feriado" data-feriado-id="${feriado.id}"></i></td>`;
+        body.appendChild(tr);
     });
 }
-function getCorretorasComPosicaoNaData(data) {
-    const nomesCorretoras = new Set();
-    const posicoesRV = gerarPosicaoDetalhada(data);
-
-    Object.values(posicoesRV).forEach(posicao => {
-        for (const corretora in posicao.porCorretora) {
-            if (posicao.porCorretora[corretora] > 0.000001) {
-                nomesCorretoras.add(corretora.trim());
-            }
-        }
-    });
-
-    return [...nomesCorretoras].sort();
-}
-function popularFiltrosCorretora() {
-    const corretoras = getTodasCorretoras();
-    const corretorasHtml = corretoras.map(c => `<option value="${c}">${c}</option>`).join('');
-    document.querySelectorAll('.broker-filter').forEach(select => {
-        select.innerHTML = '<option value="consolidado">Consolidado</option>' + corretorasHtml;
-    });
-}
-function getPrimeiraData() { const datas = []; todasAsNotas.forEach(n => datas.push(new Date(n.data))); posicaoInicial.forEach(p => { if(p.data) datas.push(new Date(p.data)) }); todosOsAjustes.forEach(a => datas.push(new Date(a.data))); if (datas.length === 0) return null; const dataMaisAntiga = new Date(Math.min.apply(null, datas)); return dataMaisAntiga.toLocaleDateString('pt-BR', {timeZone: 'UTC'}); }
-
-function renderizarInfoBackup() {
-    const container = document.getElementById('backup-info');
-    if (!container) return;
-
-    const timestamp = timestampUltimoBackup || localStorage.getItem('carteira_ultimo_backup');
-
-    if (timestamp) {
-        const data = new Date(timestamp);
-        // Formato Inglês Britânico (en-GB)
-        const dataFormatada = data.toLocaleDateString('en-GB');
-        const horaFormatada = data.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-        // Tradução: Último backup
-        container.innerHTML = `<span>Last backup: ${dataFormatada} at ${horaFormatada}</span>`;
+function abrirModalFeriado(feriadoParaEditar = null) {
+    const form = document.getElementById('form-cadastro-feriado');
+    form.reset();
+    if (feriadoParaEditar) {
+        document.getElementById('modal-feriado-titulo').textContent = 'Editar Feriado';
+        document.getElementById('feriado-id').value = feriadoParaEditar.id;
+        document.getElementById('feriado-data').value = feriadoParaEditar.data;
+        document.getElementById('feriado-descricao').value = feriadoParaEditar.descricao;
     } else {
-        // Tradução: Nunca
-        container.innerHTML = `<span>Last backup: Never</span>`;
+        document.getElementById('modal-feriado-titulo').textContent = 'Cadastrar Novo Feriado';
+        document.getElementById('feriado-id').value = '';
+    }
+    modalCadastroFeriado.style.display = 'block';
+    document.getElementById('feriado-data').focus();
+}
+function deletarFeriado(feriadoId) {
+    if (confirm('Tem certeza que deseja excluir este feriado?')) {
+        todosOsFeriados = todosOsFeriados.filter(f => f.id !== feriadoId);
+        salvarFeriados();
+        renderizarTabelaFeriados();
     }
 }
-
-function abrirModalCorrecaoContasSemMoeda() {
-    const container = document.getElementById('lista-contas-sem-moeda-container');
-    const contasParaCorrigir = todasAsContas.filter(c => typeof c.moeda === 'undefined');
-
-    if (contasParaCorrigir.length === 0) {
-        alert('Nenhuma conta para corrigir!');
-        return;
-    }
-
-    let tableHtml = `<table class="tabela-correcao-orfaos">
-        <thead>
-            <tr>
-                <th>Conta</th>
-                <th>Moeda</th>
-                <th>Detalhes (Apenas para BRL)</th>
-            </tr>
-        </thead>
-        <tbody>`;
-    
-    contasParaCorrigir.forEach(conta => {
-        tableHtml += `
-            <tr class="conta-correcao-row" data-conta-id="${conta.id}">
-                <td><strong>${conta.banco} - ${conta.tipo}</strong></td>
-                <td>
-                    <select class="conta-correcao-moeda" data-conta-id="${conta.id}">
-                        <option value="">Selecione...</option>
-                        <option value="BRL">Real (BRL)</option>
-                        <option value="USD">Dólar (USD)</option>
-                        <option value="EUR">Euro (EUR)</option>
-                        <option value="GBP">Libra (GBP)</option>
-                    </select>
-                </td>
-                <td>
-                    <div class="detalhes-brl-container" id="detalhes-brl-${conta.id}" style="display: none;">
-                        <input type="text" class="conta-correcao-agencia" placeholder="Agência" value="${conta.agencia || ''}">
-                        <input type="text" class="conta-correcao-numero" placeholder="Conta" value="${conta.numero || ''}">
-                        <input type="text" class="conta-correcao-pix" placeholder="Chave Pix" value="${conta.pix || ''}">
-                    </div>
-                </td>
-            </tr>
-        `;
-    });
-    
-    tableHtml += '</tbody></table>';
-    container.innerHTML = tableHtml;
-    abrirModal('modal-corrigir-contas-sem-moeda');
-}
-
-
-
-function abrirModalValoresVenda() {
-    const container = document.getElementById('lista-vendas-historicas-container');
-    
-    let tableHtml = `<table>
-                        <thead>
-                            <tr>
-                                <th>Data</th>
-                                <th>Ativo</th>
-                                <th class="numero">Quantidade</th>
-                                <th class="venda-input-col numero">Valor Total da Venda (R$)</th>
-                            </tr>
-                        </thead>
-                        <tbody>`;
-    
-    let hasVendas = false;
-    posicaoInicial.forEach((p, index) => {
-        if (p.tipoRegistro === 'TRANSACAO_HISTORICA' && p.transacao.toLowerCase() === 'venda' && (p.valorVenda === null || typeof p.valorVenda === 'undefined')) {
-            hasVendas = true;
-            tableHtml += `<tr>
-                            <td>${new Date(p.data + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
-                            <td>${p.ticker}</td>
-                            <td class="numero">${p.quantidade}</td>
-                            <td class="venda-input-col">
-                                <input type="text" class="venda-historica-valor" data-index="${index}" placeholder="Ex: 1.234,56">
-                            </td>
-                          </tr>`;
-        }
-    });
-
-    if (!hasVendas) {
-        alert("Nenhuma venda histórica para corrigir!");
-        return;
-    }
-
-    tableHtml += '</tbody></table>';
-    container.innerHTML = tableHtml;
-    modalInformarValoresVenda.style.display = 'block';
-}
-
-
-
-function abrirModalCorrecaoData(recordType, recordId) {
-    document.getElementById('corrigir-data-record-type').value = recordType;
-    document.getElementById('corrigir-data-record-id').value = recordId;
-    document.getElementById('form-corrigir-data').reset();
-    
-    let arrayFonte, nomeDescricao, registro;
-    const id = parseFloat(recordId);
-
-    switch(recordType) {
-        case 'nota': arrayFonte = todasAsNotas; nomeDescricao = 'Nota de Negociação'; break;
-        case 'provento-com':
-        case 'provento-pag': arrayFonte = todosOsProventos; nomeDescricao = 'Provento'; break;
-        case 'ajuste': arrayFonte = todosOsAjustes; nomeDescricao = 'Ajuste'; break;
-        case 'posicao': arrayFonte = posicaoInicial; nomeDescricao = 'Posição Inicial'; break;
-        case 'transacao': arrayFonte = todasAsMovimentacoes; nomeDescricao = 'Transação Manual'; break;
-        default: return;
-    }
-
-    registro = arrayFonte.find(r => r.id === id);
-    if(registro) {
-        let nomeCampo = recordType.includes('provento') ? (recordType.endsWith('-com') ? 'Data Com' : 'Data Pagamento') : 'Data';
-        document.getElementById('modal-corrigir-data-descricao').textContent = `Corrigindo ${nomeCampo} para: ${nomeDescricao} (${registro.ticker || registro.numero || registro.descricao || ''})`;
-    }
-
-    modalCorrigirData.style.display = 'block';
-    document.getElementById('corrigir-data-input').focus();
-}
-
-
 function abrirModalEventoAtivo(ajusteParaEditar = null) {
     const form = document.getElementById('form-evento-ativo');
     form.reset();
@@ -828,363 +376,15 @@ function abrirModalEventoAtivo(ajusteParaEditar = null) {
     modalEventoAtivo.style.display = 'block';
     document.getElementById('evento-ativo-tipo').focus();
 }
-
-function renderizarTabelaFeriados() {
-    const container = document.getElementById('lista-de-feriados');
-    container.innerHTML = `<table><thead><tr><th>Data</th><th>Descrição</th><th class="controles-col">Controles</th></tr></thead><tbody></tbody></table>`;
-    const body = container.querySelector('tbody');
-    body.innerHTML = '';
-    if (todosOsFeriados.length === 0) {
-        body.innerHTML = '<tr><td colspan="3" style="text-align:center;">Nenhum feriado cadastrado.</td></tr>';
-        return;
-    }
-    todosOsFeriados.sort((a,b) => new Date(a.data) - new Date(b.data)).forEach(feriado => {
-        const tr = document.createElement('tr');
-        const dataFormatada = new Date(feriado.data + 'T12:00:00').toLocaleDateString('pt-BR');
-        tr.innerHTML = `<td>${dataFormatada}</td><td>${feriado.descricao}</td><td class="controles-col"><i class="fas fa-edit acao-btn edit" title="Editar Feriado" data-feriado-id="${feriado.id}"></i><i class="fas fa-trash acao-btn delete" title="Excluir Feriado" data-feriado-id="${feriado.id}"></i></td>`;
-        body.appendChild(tr);
-    });
-}
-function abrirModalFeriado(feriadoParaEditar = null) {
-    const form = document.getElementById('form-cadastro-feriado');
-    form.reset();
-    if (feriadoParaEditar) {
-        document.getElementById('modal-feriado-titulo').textContent = 'Editar Feriado';
-        document.getElementById('feriado-id').value = feriadoParaEditar.id;
-        document.getElementById('feriado-data').value = feriadoParaEditar.data;
-        document.getElementById('feriado-descricao').value = feriadoParaEditar.descricao;
+function toggleSelecaoVenda(ticker) {
+    // Se não estiver definido, assume que estava 'true' (padrão) e vira 'false'
+    if (estadoSelecaoVendas[ticker] === undefined) {
+        estadoSelecaoVendas[ticker] = false;
     } else {
-        document.getElementById('modal-feriado-titulo').textContent = 'Cadastrar Novo Feriado';
-        document.getElementById('feriado-id').value = '';
+        // Inverte o estado atual
+        estadoSelecaoVendas[ticker] = !estadoSelecaoVendas[ticker];
     }
-    modalCadastroFeriado.style.display = 'block';
-    document.getElementById('feriado-data').focus();
-}
-
-function renderizarTabelaContas() { 
-    const container = document.getElementById('lista-de-contas-cadastradas'); 
-    container.innerHTML = `<table><thead><tr><th>Nome</th><th>Tipo/Moeda</th><th>Agência</th><th>Conta</th><th class="numero">Saldo Inicial</th><th>Data Saldo</th><th class="controles-col">Controles</th></tr></thead><tbody></tbody></table>`; 
-    const body = container.querySelector('tbody'); 
-    body.innerHTML = ''; 
-    
-    const todosOsItens = [
-        ...todasAsContas.map(c => ({...c, tipoItem: 'conta'})),
-        ...todosOsAtivosMoedas.map(a => ({...a, tipoItem: 'moeda'}))
-    ];
-
-    if (todosOsItens.length === 0) { 
-        body.innerHTML = '<tr><td colspan="7" style="text-align:center;">Nenhuma conta ou ativo em moeda cadastrado.</td></tr>'; 
-        return; 
-    } 
-    
-    todosOsItens.sort((a,b) => (a.banco || a.nomeAtivo).localeCompare(b.banco || b.nomeAtivo)).forEach(item => { 
-        const tr = document.createElement('tr'); 
-        const dataFormatada = new Date(item.dataSaldoInicial + 'T12:00:00').toLocaleDateString('pt-BR');
-        
-        if(item.tipoItem === 'conta') {
-            tr.innerHTML = `<td>${item.banco}</td><td>${item.tipo} (BRL)</td><td>${item.agencia}</td><td>${item.numero}</td><td class="numero">${formatarMoeda(item.saldoInicial)}</td><td>${dataFormatada}</td><td class="controles-col"><i class="fas fa-edit acao-btn edit" title="Editar Conta" data-conta-id="${item.id}"></i></td>`; 
-        } else {
-            tr.innerHTML = `<td>${item.nomeAtivo}</td><td>Ativo em Moeda (${item.moeda})</td><td>-</td><td>-</td><td class="numero">${formatarMoedaEstrangeira(item.saldoInicial, item.moeda)}</td><td>${dataFormatada}</td><td class="controles-col"><i class="fas fa-edit acao-btn edit" title="Editar Ativo" data-ativo-moeda-id="${item.id}"></i></td>`;
-        }
-        body.appendChild(tr); 
-    }); 
-}
-
-
-function atualizarResumoAporte() {
-    // O aporte total agora pode ser negativo (ex: dinheiro da venda pagando RF)
-    // ParseDecimal precisa lidar com negativos corretamente, mas geralmente remove o sinal se não for cuidadoso.
-    // Como parseDecimal usa regex [^0-9,-], ele deve aceitar negativos.
-    const aporteTotal = parseDecimal(document.getElementById('negociar-aporte-valor').value);
-
-    let totalComprasFiis = 0;
-    let totalVendasFiis = 0; // Novo acumulador
-
-    for (const ticker in dadosSimulacaoNegociar.fiis) {
-        const sim = dadosSimulacaoNegociar.fiis[ticker];
-        if (sim.qtd && sim.preco) {
-            const valorOperacao = sim.qtd * sim.preco;
-            if (sim.qtd > 0) {
-                totalComprasFiis += valorOperacao;
-            } else {
-                totalVendasFiis += Math.abs(valorOperacao); // Soma vendas
-            }
-        }
-    }
-
-    let totalComprasAcoes = 0;
-    let totalVendasAcoes = 0; // Novo acumulador
-
-    for (const ticker in dadosSimulacaoNegociar.acoes) {
-        const sim = dadosSimulacaoNegociar.acoes[ticker];
-        if (sim.qtd && sim.preco) {
-            const valorOperacao = sim.qtd * sim.preco;
-            if (sim.qtd > 0) {
-                totalComprasAcoes += valorOperacao;
-            } else {
-                totalVendasAcoes += Math.abs(valorOperacao); // Soma vendas
-            }
-        }
-    }
-
-    // Saldo = (Dinheiro que eu coloquei) + (Dinheiro que ganhei vendendo) - (Dinheiro que gastei comprando)
-    const saldoDisponivel = aporteTotal + totalVendasFiis + totalVendasAcoes - totalComprasFiis - totalComprasAcoes;
-
-    document.getElementById('negociar-total-compras-fiis').textContent = formatarMoeda(totalComprasFiis);
-    document.getElementById('negociar-total-compras-acoes').textContent = formatarMoeda(totalComprasAcoes);
-
-    const elSaldoDisponivel = document.getElementById('negociar-saldo-disponivel');
-    elSaldoDisponivel.textContent = formatarMoeda(saldoDisponivel);
-
-    if (saldoDisponivel < -0.01) {
-        elSaldoDisponivel.classList.add('valor-negativo');
-        elSaldoDisponivel.classList.remove('valor-positivo');
-    } else {
-        elSaldoDisponivel.classList.remove('valor-negativo');
-        elSaldoDisponivel.classList.add('valor-positivo');
-    }
-}
-function abrirModalAtivosPorCNPJ(cnpj) {
-    if (!cnpj) return;
-
-    const ativosDoMesmoGrupo = todosOsAtivos.filter(a => a.cnpj === cnpj);
-    if (ativosDoMesmoGrupo.length <= 1) return; // Não abre o modal se houver apenas 1 ativo
-
-    const primeiroAtivo = ativosDoMesmoGrupo[0];
-    const nomeEmpresa = primeiroAtivo.nome || primeiroAtivo.nomePregao || `CNPJ: ${formatarCNPJ(cnpj)}`;
-
-    document.getElementById('modal-cnpj-titulo').textContent = `Ativos de: ${nomeEmpresa}`;
-    
-    let listaHtml = '<ul>';
-    ativosDoMesmoGrupo.forEach(ativo => {
-        listaHtml += `<li>${ativo.ticker}</li>`;
-    });
-    listaHtml += '</ul>';
-
-    document.getElementById('modal-cnpj-conteudo').innerHTML = listaHtml;
-    abrirModal('modal-lista-ativos-cnpj');
-}
-function renderizarTabelaAtivos() {
-    const container = document.getElementById('lista-de-ativos-cadastrados');
-    // Tradução dos cabeçalhos
-    const tableHeaders = `
-        <th class="sortable" data-key="ticker">Asset</th>
-        <th class="sortable" data-key="nomePregao">Trading Name</th>
-        <th class="sortable" data-key="nome">Name</th>
-        <th class="sortable" data-key="tipo">Type</th>
-        <th class="sortable" data-key="metaYieldBazin">Yield Goal (Bazin) (%)</th>
-        <th class="sortable" data-key="cnpj">Tax ID (CNPJ)</th>
-        <th class="controles-col">Actions</th>`;
-    container.innerHTML = `<table><thead><tr>${tableHeaders}</tr></thead><tbody id="tabela-ativos-body"></tbody></table>`;
-    
-    const body = document.getElementById('tabela-ativos-body');
-    body.innerHTML = '';
-    
-    const sortedAtivos = [...todosOsAtivos].sort((a, b) => {
-        const key = sortConfigAtivos.key;
-        const direction = sortConfigAtivos.direction === 'ascending' ? 1 : -1;
-        const valA = a[key] || '';
-        const valB = b[key] || '';
-        if (typeof valA === 'string' && typeof valB === 'string') {
-            return valA.localeCompare(valB) * direction;
-        }
-        if (valA < valB) return -1 * direction;
-        if (valA > valB) return 1 * direction;
-        return 0;
-    });
-
-    sortedAtivos.forEach(ativo => {
-        const tr = document.createElement('tr');
-        tr.dataset.id = ativo.id;
-        // Tradução do tooltip de aviso
-        const warningIcon = !ativo.tipo ? `<i class="fas fa-exclamation-triangle warning-icon" title="Incomplete registration: Asset Type is required"></i>` : '';
-        
-        const metaYieldBazinFmt = (ativo.tipo === 'Ação' && typeof ativo.metaYieldBazin === 'number') 
-            ? formatarDecimal(ativo.metaYieldBazin * 100) 
-            : 'N/A';
-
-        if (isAtivosEditMode) {
-            const campoYield = (ativo.tipo === 'Ação')
-                ? `<input type="text" class="edit-field numero" data-field="metaYieldBazin" value="${metaYieldBazinFmt}">`
-                : '<span>N/A</span>';
-
-            tr.innerHTML = `
-                <td><input type="text" class="edit-field" data-field="ticker" value="${ativo.ticker || ''}"></td>
-                <td><input type="text" class="edit-field" data-field="nomePregao" value="${ativo.nomePregao || ''}"></td>
-                <td><input type="text" class="edit-field" data-field="nome" value="${ativo.nome || ''}"></td>
-                <td>
-                    <select class="edit-field" data-field="tipo">
-                        <option value="">Select...</option>
-                        <option value="Ação" ${ativo.tipo === 'Ação' ? 'selected' : ''}>Share</option>
-                        <option value="FII" ${ativo.tipo === 'FII' ? 'selected' : ''}>REIT</option>
-                        <option value="ETF" ${ativo.tipo === 'ETF' ? 'selected' : ''}>ETF</option>
-                    </select>
-                </td>
-                <td>${campoYield}</td>
-                <td><input type="text" class="edit-field" data-field="cnpj" value="${formatarCNPJ(ativo.cnpj)}"></td>
-                <td></td>`;
-        } else {
-            // Tradução dos tooltips dos botões
-            tr.innerHTML = `
-                <td>${ativo.ticker} ${warningIcon}</td>
-                <td>${ativo.nomePregao || ''}</td>
-                <td>${ativo.nome || ''}</td>
-                <td>${ativo.tipo || ''}</td>
-                <td class="numero">${metaYieldBazinFmt}</td>
-                <td class="cnpj-clicavel" data-cnpj="${ativo.cnpj}">${formatarCNPJ(ativo.cnpj)}</td>
-                <td class="controles-col">
-                    <i class="fas fa-edit acao-btn edit" title="Edit Asset" data-ativo-id="${ativo.id}"></i>
-                    <i class="fas fa-trash acao-btn delete" title="Delete Asset" data-ativo-id="${ativo.id}"></i>
-                </td>`;
-        }
-        body.appendChild(tr);
-    });
-
-    document.querySelectorAll('#lista-de-ativos-cadastrados .sortable').forEach(header => {
-        header.classList.remove('ascending', 'descending');
-        if (header.dataset.key === sortConfigAtivos.key) {
-            header.classList.add(sortConfigAtivos.direction);
-        }
-    });
-}
-function verificarTickerExistente(event) {
-    const tickerInput = event.target;
-    const ticker = tickerInput.value.toUpperCase().trim();
-    if (!ticker) return;
-
-    const ativoExistente = todosOsAtivos.find(a => a.ticker === ticker);
-
-    if (ativoExistente) {
-        // Tradução: Alerta de existência
-        alert(`The asset ${ticker} is already registered. Loading data for editing.`);
-        
-        // Tradução: Título do modal
-        document.getElementById('modal-ativo-titulo').textContent = 'Edit Asset';
-        document.getElementById('ativo-id').value = ativoExistente.id;
-        document.getElementById('ativo-tipo').value = ativoExistente.tipo;
-        document.getElementById('ativo-nome-pregao').value = ativoExistente.nomePregao || '';
-        document.getElementById('ativo-nome').value = ativoExistente.nome;
-        document.getElementById('ativo-cnpj').value = formatarCNPJ(ativoExistente.cnpj);
-        document.getElementById('ativo-tipo-acao').value = ativoExistente.tipoAcao || '';
-        document.getElementById('ativo-admin-nome').value = ativoExistente.adminNome || '';
-        document.getElementById('ativo-admin-cnpj').value = formatarCNPJ(ativoExistente.adminCnpj);
-
-        if (ativoExistente.tipo === 'Ação') {
-            document.getElementById('ativo-meta-yield-bazin').value = ativoExistente.metaYieldBazin ? formatarDecimal(ativoExistente.metaYieldBazin * 100) : '6.00';
-        }
-        
-        document.getElementById('ativo-tipo').dispatchEvent(new Event('change'));
-
-    } else {
-        const radical = ticker.substring(0, 4);
-        const ativoSemelhante = todosOsAtivos.find(a => a.ticker.startsWith(radical));
-
-        if (ativoSemelhante) {
-            document.getElementById('ativo-nome-pregao').value = ativoSemelhante.nomePregao || '';
-            document.getElementById('ativo-nome').value = ativoSemelhante.nome || '';
-            document.getElementById('ativo-cnpj').value = formatarCNPJ(ativoSemelhante.cnpj);
-        }
-    }
-}
-function abrirModalCadastroAtivo(ativoParaEditar = null, tickerPreenchido = '') {
-    const form = document.getElementById('form-cadastro-ativo');
-    form.reset();
-    document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
-    const tituloModal = document.getElementById('modal-ativo-titulo');
-    const tipoSelect = document.getElementById('ativo-tipo');
-    const tickerInput = document.getElementById('ativo-ticker');
-
-    const novoTickerInput = tickerInput.cloneNode(true);
-    tickerInput.parentNode.replaceChild(novoTickerInput, tickerInput);
-    
-    novoTickerInput.addEventListener('blur', verificarTickerExistente);
-
-    if (ativoParaEditar) {
-        // Tradução: Título
-        tituloModal.textContent = 'Edit Asset';
-        document.getElementById('ativo-id').value = ativoParaEditar.id;
-        novoTickerInput.value = ativoParaEditar.ticker;
-        tipoSelect.value = ativoParaEditar.tipo;
-        document.getElementById('ativo-nome-pregao').value = ativoParaEditar.nomePregao || '';
-        document.getElementById('ativo-nome').value = ativoParaEditar.nome;
-        document.getElementById('ativo-cnpj').value = formatarCNPJ(ativoParaEditar.cnpj);
-        document.getElementById('ativo-tipo-acao').value = ativoParaEditar.tipoAcao || '';
-        document.getElementById('ativo-admin-nome').value = ativoParaEditar.adminNome || '';
-        document.getElementById('ativo-admin-cnpj').value = formatarCNPJ(ativoParaEditar.adminCnpj);
-        
-        if (ativoParaEditar.tipo === 'Ação') {
-            document.getElementById('ativo-meta-yield-bazin').value = ativoParaEditar.metaYieldBazin ? formatarDecimal(ativoParaEditar.metaYieldBazin * 100) : '6.00';
-        }
-    } else {
-        // Tradução: Título
-        tituloModal.textContent = 'Register New Asset';
-        document.getElementById('ativo-id').value = '';
-        novoTickerInput.value = tickerPreenchido.toUpperCase();
-        tipoSelect.value = '';
-    }
-
-    tipoSelect.dispatchEvent(new Event('change'));
-    abrirModal('modal-cadastro-ativo');
-    (tickerPreenchido ? document.getElementById('ativo-nome-pregao') : novoTickerInput).focus();
-}
-
-function buscarEcadastrarAtivosAusentes(silencioso = false) {
-    const tickersCadastrados = new Set(todosOsAtivos.map(a => a.ticker));
-    const todosOsTickersUsados = new Set();
-    todasAsNotas.forEach(n => n.operacoes.forEach(op => todosOsTickersUsados.add(op.ativo)));
-    posicaoInicial.forEach(p => todosOsTickersUsados.add(p.ticker));
-    todosOsProventos.forEach(p => todosOsTickersUsados.add(p.ticker));
-    todosOsAjustes.forEach(a => {
-        if (a.tipoAjuste === 'transferencia') {
-            a.ativosTransferidos.forEach(at => todosOsTickersUsados.add(at.ticker));
-        } else if (a.ticker) {
-            todosOsTickersUsados.add(a.ticker);
-        }
-    });
-
-    const novosAtivos = [];
-    todosOsTickersUsados.forEach(ticker => {
-        if (ticker && !tickersCadastrados.has(ticker)) {
-            const novoAtivoMinimo = {
-                id: Date.now() + Math.random(),
-                ticker: ticker,
-                tipo: '', 
-                nome: '', 
-                nomePregao: '', 
-                tipoAcao: '', 
-                cnpj: '', 
-                adminNome: '', 
-                adminCnpj: '',
-                statusAporte: 'Ativo'
-            };
-            novosAtivos.push(novoAtivoMinimo);
-        }
-    });
-
-    if (novosAtivos.length > 0) {
-        todosOsAtivos.push(...novosAtivos);
-        salvarAtivos();
-        if (!silencioso) {
-            renderizarTabelaAtivos();
-            // Tradução: Mensagem de sucesso
-            alert(`${novosAtivos.length} new asset(s) were found and registered successfully! Please complete their registration details if necessary.`);
-        }
-    } else {
-        if (!silencioso) {
-            // Tradução: Mensagem de nada encontrado
-            alert('No new assets found. All assets used in records are already registered.');
-        }
-    }
-}
-
-function abrirModalEdicaoMovimentacaoRF(transacaoId) {
-    const transacaoParaEditar = todasAsMovimentacoes.find(t => t.id === transacaoId);
-    
-    if (!transacaoParaEditar) {
-        alert('Erro: Transação não encontrada.');
-        return;
-    }
-    abrirModalNovaTransacaoMoeda(transacaoParaEditar);
+    renderizarTelaConsultaBalanceamento();
 }
 function gerarLinhaPosicaoMassaHTML() {
     const corretorasOptions = getTodasCorretoras().map(c => `<option value="${c}">${c}</option>`).join('');
@@ -1215,26 +415,76 @@ function renderizarTelaPosicaoMassa() {
 }
 function gerarLinhaProventoMassaHTML() {
     const tr = document.createElement('tr');
+    
+    // HTML limpo, sem chamadas a funções inexistentes
     tr.innerHTML = `
-        <td><input type="text" class="prov-massa-ticker ticker-input" placeholder="ITSA4"></td>
         <td>
-            <select class="prov-massa-tipo">
-                <option value="Rendimento">Rendimento</option>
+            <input type="text" class="form-control prov-massa-ticker" placeholder="Ticker" 
+                   oninput="this.value = this.value.toUpperCase()" title="Digite um ativo cadastrado">
+        </td>
+        <td><input type="date" class="form-control prov-massa-data-com"></td>
+        <td><input type="date" class="form-control prov-massa-data-pag"></td>
+        <td>
+            <select class="form-control prov-massa-tipo">
                 <option value="Dividendo">Dividendo</option>
                 <option value="JCP">JCP</option>
+                <option value="Rendimento">Rendimento</option>
                 <option value="Bonificação">Bonificação</option>
-                <option value="Outros">Outros</option>
+                <option value="Amortização">Amortização</option>
             </select>
         </td>
-        <td><input type="date" class="prov-massa-data-com"></td>
-        <td><input type="date" class="prov-massa-data-pag"></td>
-        <td><input type="text" class="prov-massa-valor-bruto numero" placeholder="Ex: 0,158562"></td>
-        <td><input type="text" class="prov-massa-ir numero" placeholder="Digite o percentual aqui"></td>
-        <td><button type="button" class="btn btn-danger btn-sm" onclick="this.closest('tr').remove()" title="Remover Linha"><i class="fas fa-trash"></i></button></td>
+        <td><input type="text" class="form-control prov-massa-valor-bruto" placeholder="0,00"></td>
+        <td><input type="number" class="form-control prov-massa-ir" placeholder="%" step="0.01"></td>
+        <td style="text-align: center;">
+            <button class="btn-delete-row" onclick="this.closest('tr').remove()" title="Remover linha">
+                <i class="fas fa-trash"></i>
+            </button>
+        </td>
     `;
+
+    // --- LÓGICA DE VALIDAÇÃO VISUAL E CÁLCULO DE IR ---
+    const inputTicker = tr.querySelector('.prov-massa-ticker');
+    const selectTipo = tr.querySelector('.prov-massa-tipo');
+    const inputIR = tr.querySelector('.prov-massa-ir');
+
+    const validarEPreencher = () => {
+        const ticker = inputTicker.value.toUpperCase().trim();
+        const tipo = selectTipo.value;
+
+        if (!ticker) {
+            inputTicker.classList.remove('input-erro');
+            return;
+        }
+
+        // Verifica se ativo existe (igual ao código de Posições que você mandou)
+        let listaAtivos = (typeof todosOsAtivos !== 'undefined') ? todosOsAtivos : [];
+        const ativoExiste = listaAtivos.some(a => a.ticker === ticker);
+
+        if (!ativoExiste) {
+            inputTicker.classList.add('input-erro'); // Borda vermelha
+            inputTicker.title = "Ativo não encontrado na sua carteira!";
+            inputIR.value = ''; 
+        } else {
+            inputTicker.classList.remove('input-erro');
+            inputTicker.title = ""; 
+
+            // Calcula IR (Inteligência nova)
+            if (tipo) {
+                const aliquotaDecimal = calcularValorIRSugerido(ticker, tipo);
+                // Proteção contra NaN
+                if (!isNaN(aliquotaDecimal)) {
+                    const porcentagem = aliquotaDecimal * 100;
+                    inputIR.value = parseFloat(porcentagem.toFixed(2));
+                }
+            }
+        }
+    };
+
+    inputTicker.addEventListener('change', validarEPreencher);
+    selectTipo.addEventListener('change', validarEPreencher);
+
     return tr;
 }
-
 function renderizarTelaProventosMassa() {
     const tbody = document.getElementById('tabela-proventos-massa-body');
     tbody.innerHTML = '';
@@ -1242,7 +492,6 @@ function renderizarTelaProventosMassa() {
         tbody.appendChild(gerarLinhaProventoMassaHTML());
     }
 }
-
 function renderizarTabelaPosicaoInicial() {
     const container = document.getElementById('lista-de-posicoes-iniciais');
     container.innerHTML = `<table><thead><tr><th>Tipo</th><th>Data</th><th>Ativo</th><th>Detalhes</th><th class="numero">Preço Médio</th><th class="controles-col">Controles</th></tr></thead><tbody></tbody></table>`;
@@ -1283,7 +532,6 @@ function renderizarTabelaPosicaoInicial() {
     });
 }
 function adicionarLinhaCorretora(corretora = '', quantidade = '') { const container = document.getElementById('posicoes-corretoras-container'); const div = document.createElement('div'); div.className = 'corretora-row'; div.innerHTML = `<div class="form-group"><label>Corretora</label><input type="text" class="posicao-corretora" value="${corretora}" required></div><div class="form-group"><label>Quantidade</label><input type="number" step="1" class="posicao-quantidade" value="${quantidade}" required></div><button type="button" class="btn btn-danger" onclick="this.parentElement.remove()"><i class="fas fa-trash"></i></button>`; container.appendChild(div); }
-
 function iniciarAdicaoHistorico() {
     containerListaPosicoes.style.display = 'none';
     containerAdicionarHistorico.style.display = 'block';
@@ -1347,9 +595,6 @@ function buscarAtivoParaHistorico(event) {
     tbody.innerHTML = '';
     adicionarLinhaHistorico(tbody);
 }
-
-
-
 function renderizarTelaImportacaoHistorico(dadosAgrupados) {
     mostrarTela('importacaoHistorico');
     const container = document.getElementById('container-revisao-historico');
@@ -1419,21 +664,6 @@ function renderizarTelaImportacaoHistorico(dadosAgrupados) {
         });
     }
 }
-
-
-function getProventosTransferiveis(corretoraOrigem, dataTransferencia) {
-    if (!corretoraOrigem || !dataTransferencia) {
-        return [];
-    }
-
-    return todosOsProventos.filter(p => {
-        const temPosicaoNaOrigem = p.posicaoPorCorretora && p.posicaoPorCorretora[corretoraOrigem] && p.posicaoPorCorretora[corretoraOrigem].valorRecebido > 0;
-        
-        return temPosicaoNaOrigem &&
-               p.dataCom && p.dataCom <= dataTransferencia &&
-               p.dataPagamento && p.dataPagamento > dataTransferencia;
-    });
-}
 function renderizarTabelaTransferencias() {
     const container = document.getElementById('lista-de-transferencias');
     const transferencias = todosOsAjustes.filter(a => a.tipoAjuste === 'transferencia');
@@ -1476,100 +706,6 @@ function renderizarTabelaTransferencias() {
     });
     tableHtml += '</tbody></table>';
     container.innerHTML = tableHtml;
-}
-
-function popularAtivosParaTransferencia(corretoraOrigem, dataTransferencia, transferenciaParaEditar = null) {
-    const containerAtivos = document.getElementById('transferencia-ativos-disponiveis');
-    const containerProventos = document.getElementById('transferencia-proventos-disponiveis');
-    document.getElementById('transferencia-ativos-container').style.display = 'block';
-
-    if (!corretoraOrigem || !dataTransferencia) {
-        containerAtivos.innerHTML = '<p>Selecione uma corretora de origem e uma data.</p>';
-        containerProventos.innerHTML = '';
-        return;
-    }
-
-    const posicoes = gerarPosicaoDetalhada(dataTransferencia);
-    const ativosDisponiveis = Object.entries(posicoes)
-        .filter(([ticker, dados]) => (dados.porCorretora[corretoraOrigem] || 0) > 0.000001)
-        .map(([ticker, dados]) => ({ ticker, quantidade: dados.porCorretora[corretoraOrigem] }));
-
-    if (transferenciaParaEditar && transferenciaParaEditar.ativosTransferidos) {
-        transferenciaParaEditar.ativosTransferidos.forEach(ativoT => {
-            const ativoNaLista = ativosDisponiveis.find(a => a.ticker === ativoT.ticker);
-            if (ativoNaLista) {
-                ativoNaLista.quantidade += ativoT.quantidade;
-            } else {
-                ativosDisponiveis.push({ ticker: ativoT.ticker, quantidade: ativoT.quantidade });
-            }
-        });
-    }
-
-    ativosDisponiveis.sort((a,b) => a.ticker.localeCompare(b.ticker));
-
-    if (ativosDisponiveis.length === 0) {
-        containerAtivos.innerHTML = `<p>Nenhum ativo encontrado na corretora ${corretoraOrigem} na data selecionada.</p>`;
-    } else {
-        containerAtivos.innerHTML = ativosDisponiveis.map(ativo => `
-            <div class="ativo-item">
-                <input type="checkbox" id="transfer-ativo-${ativo.ticker}" name="transfer-ativo" value="${ativo.ticker}">
-                <label for="transfer-ativo-${ativo.ticker}">${ativo.ticker} (Disponível: ${Math.round(ativo.quantidade)})</label>
-                <input type="number" class="transfer-quantidade" placeholder="Qtd" min="1" max="${Math.round(ativo.quantidade)}" style="width: 100px;">
-            </div>
-        `).join('');
-    }
-
-    const proventosJaTransferidosIds = new Set(transferenciaParaEditar?.proventosTransferidos || []);
-    
-    let proventosDisponiveis = getProventosTransferiveis(corretoraOrigem, dataTransferencia);
-
-    if (transferenciaParaEditar) {
-        proventosJaTransferidosIds.forEach(id => {
-            if (!proventosDisponiveis.some(p => p.id === id)) {
-                const proventoAntigo = todosOsProventos.find(p => p.id === id);
-                if (proventoAntigo) proventosDisponiveis.push(proventoAntigo);
-            }
-        });
-    }
-
-    proventosDisponiveis.sort((a,b) => a.ticker.localeCompare(b.ticker));
-
-    if (proventosDisponiveis.length === 0) {
-        containerProventos.innerHTML = `<p>Nenhum provento pendente encontrado para transferência nesta data.</p>`;
-    } else {
-        containerProventos.innerHTML = proventosDisponiveis.map(provento => {
-            const isAlreadyTransferred = proventosJaTransferidosIds.has(provento.id);
-            const valorNaCorretora = (provento.posicaoPorCorretora[corretoraOrigem] || provento.posicaoPorCorretora[transferenciaParaEditar?.corretoraDestino] || {valorRecebido: 0}).valorRecebido;
-            const dataPagFmt = new Date(provento.dataPagamento + 'T12:00:00').toLocaleDateString('pt-BR');
-            
-            const checkboxHtml = `<input type="checkbox" id="transfer-provento-${provento.id}" name="transfer-provento" value="${provento.id}" ${isAlreadyTransferred ? 'checked disabled' : ''}>`;
-            const labelHtml = `<label for="transfer-provento-${provento.id}">${provento.ticker} - ${provento.tipo} de ${formatarMoeda(valorNaCorretora)} (Paga em ${dataPagFmt})</label>`;
-            const infoHtml = isAlreadyTransferred ? `<span class="transferencia-item-info">(Já transferido ✔️)</span>` : '';
-            const revertBtnHtml = isAlreadyTransferred ? `<i class="fas fa-undo reverter-btn" title="Reverter transferência deste provento" data-provento-id="${provento.id}"></i>` : '';
-
-            return `<div class="transferencia-item">${checkboxHtml}${labelHtml}${infoHtml}${revertBtnHtml}</div>`;
-        }).join('');
-    }
-
-    if (transferenciaParaEditar) {
-        setTimeout(() => {
-            if (transferenciaParaEditar.ativosTransferidos) {
-                transferenciaParaEditar.ativosTransferidos.forEach(ativoT => {
-                    const checkbox = document.querySelector(`#transferencia-ativos-disponiveis input[value="${ativoT.ticker}"]`);
-                    if (checkbox) {
-                        checkbox.checked = true;
-                        checkbox.parentElement.querySelector('.transfer-quantidade').value = ativoT.quantidade;
-                    }
-                });
-            }
-            if (transferenciaParaEditar.proventosTransferidos) {
-                transferenciaParaEditar.proventosTransferidos.forEach(provId => {
-                    const checkbox = document.querySelector(`#transferencia-proventos-disponiveis input[value="${provId}"]`);
-                    if (checkbox) checkbox.checked = true;
-                });
-            }
-        }, 50);
-    }
 }
 function abrirModalEdicaoTransferencia(transferenciaId) {
     // A comparação agora é robusta, como corrigimos antes.
@@ -1633,7 +769,6 @@ function renderizarTabelaEventosCorporativos() {
     tableHtml += '</tbody></table>';
     container.innerHTML = tableHtml;
 }
-
 function abrirModalEventoCorporativo(ajusteParaEditar = null) {
     const form = document.getElementById('form-evento-corporativo');
     form.reset();
@@ -1653,7 +788,6 @@ function abrirModalEventoCorporativo(ajusteParaEditar = null) {
     modalEventoCorporativo.style.display = 'block';
     document.getElementById('evento-ticker').focus();
 }
-
 function abrirModalPosicaoInicial(posicaoParaEditar = null) {
     const form = document.getElementById('form-posicao-inicial');
     form.reset();
@@ -1681,123 +815,152 @@ function abrirModalPosicaoInicial(posicaoParaEditar = null) {
     modalPosicaoInicial.style.display = 'block';
     document.getElementById('posicao-ativo').focus();
 }
-
-
 function renderizarListaNotas() {
-    const container = document.getElementById('lista-de-notas-salvas');
-    // Tradução dos cabeçalhos
-    container.innerHTML = `<table style="font-size: 1em;"><thead><tr><th>Date</th><th>Broker</th><th>Note #</th><th>Operations</th><th>Settlement Date</th><th class="numero">Net Value</th><th class="controles-col">Actions</th></tr></thead><tbody></tbody></table>`;
+    const tbody = document.getElementById('tbody-notas');
+    const summaryContainer = document.getElementById('summary-notas');
+    const infoFiltro = document.getElementById('filtro-info-notas');
     
-    const body = container.querySelector('tbody');
-    body.innerHTML = '';
+    // --- 1. Preparação do Tooltip Flutuante (Singleton) ---
+    let tooltipDiv = document.getElementById('tooltip-flutuante');
+    if (!tooltipDiv) {
+        tooltipDiv = document.createElement('div');
+        tooltipDiv.id = 'tooltip-flutuante';
+        document.body.appendChild(tooltipDiv);
+    }
 
+    // Filtro
     const filtroAtivoInput = document.getElementById('filtro-nota-ativo');
     const filtroTexto = filtroAtivoInput ? filtroAtivoInput.value.toUpperCase().trim() : '';
+    
+    // Filtragem de Dados
     const notasParaRenderizar = todasAsNotas.filter(nota => {
-        if (!filtroTexto) {
-            return true;
-        }
+        if (!filtroTexto) { return true; }
         return nota.operacoes.some(op => op.ativo.toUpperCase().includes(filtroTexto));
     });
-    
+
+    if (infoFiltro) {
+        infoFiltro.innerText = filtroTexto ? `Filtrando por: "${filtroTexto}"` : 'Visualizando Todas as Notas';
+    }
+
+    // --- Renderização: Caso Sem Dados ---
     if (notasParaRenderizar.length === 0) {
-        // Tradução: Estado vazio
-        body.innerHTML = `<tr><td colspan="7" style="text-align:center;">No notes found${filtroTexto ? ' for filter "' + filtroTexto + '"' : ''}.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 40px; color: #7f8c8d;"><i class="fas fa-search" style="font-size: 2rem; margin-bottom: 15px; display: block; opacity: 0.5;"></i>Nenhuma nota encontrada.</td></tr>`;
+        summaryContainer.innerHTML = '';
         return;
     }
 
+    // --- Processamento e Renderização ---
+    let htmlLinhas = '';
+    let totalLiquidoGeral = 0;
+    let totalCustosGeral = 0;
+
     notasParaRenderizar.sort((a,b) => new Date(b.data) - new Date(a.data)).forEach(nota => {
-        // Tradução do tooltip detalhado
-        let tooltipText = `Broker: ${nota.corretora}\n` +
-                          `Note: ${nota.numero}\n` +
-                          `Costs: ${formatarMoeda(nota.custos || 0)}\n` +
-                          `WHT (IRRF): ${formatarMoeda(nota.irrf || 0)}\n\n` +
-                          `Operations:\n`;
-
-        if (nota.operacoes && nota.operacoes.length > 0) {
-            nota.operacoes.forEach(op => {
-                // Tradução: Compra/Venda -> Buy/Sell
-                const tipoOp = op.tipo.toLowerCase() === 'compra' ? 'Buy' : 'Sell';
-                tooltipText += ` - ${tipoOp}: ${op.quantidade} ${op.ativo} @ ${formatarMoeda(op.valor)}\n`;
-            });
-        } else {
-            tooltipText += " - No operations in this note.\n";
-        }
-
-        const tr = document.createElement('tr');
-        tr.setAttribute('data-tooltip', tooltipText.trim());
-
-        // Formatação de data em en-GB
-        const dataFormatada = nota.data ? new Date(nota.data).toLocaleDateString('en-GB') : 'Invalid Date';
-
+        
+        // Cálculos
         const totalCompras = nota.operacoes.filter(op => op.tipo === 'compra').reduce((acc, op) => acc + op.valor, 0);
         const totalVendas = nota.operacoes.filter(op => op.tipo === 'venda').reduce((acc, op) => acc + op.valor, 0);
-        const totalCustos = (nota.custos || 0) + (nota.irrf || 0);
-        const valorLiquido = totalVendas - totalCompras - totalCustos;
+        const custosNota = (nota.custos || 0) + (nota.irrf || 0);
+        const valorLiquido = totalVendas - totalCompras - custosNota;
+
+        totalLiquidoGeral += valorLiquido;
+        totalCustosGeral += custosNota;
+
+        const dataFormatada = nota.data ? new Date(nota.data).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : '-';
+        const dataLiquidacao = nota.data ? calcularDataLiquidacao(nota.data, 2).toLocaleDateString('pt-BR') : '-';
+
+        // --- Geração do Texto (Conteúdo Rico) ---
+        let tooltipContent = `DETALHES DA NOTA ${nota.numero}\n\n`;
+        tooltipContent += `Corretora: ${nota.corretora}\n`;
+        tooltipContent += `Custos Totais: ${formatarMoeda(custosNota)}\n`;
+        tooltipContent += `--------------------------\n`;
         
-        // Formatação de data de liquidação em en-GB
-        const dataLiquidacao = nota.data ? calcularDataLiquidacao(nota.data, 2).toLocaleDateString('en-GB') : 'N/A';
-        
-        // Tradução dos tooltips dos botões
-        tr.innerHTML = `
-            <td>${dataFormatada}</td>
-            <td>${nota.corretora}</td>
-            <td>${nota.numero}</td>
-            <td>${nota.operacoes.length}</td>
-            <td>${dataLiquidacao}</td>
-            <td class="numero">${formatarValorComCeD(valorLiquido)}</td>
-            <td class="controles-col">
-                <i class="fas fa-edit acao-btn edit" title="Edit Note" data-note-id="${nota.id}"></i>
-                <i class="fas fa-trash acao-btn delete" title="Delete Note" data-note-id="${nota.id}"></i>
-            </td>
+        if (nota.operacoes && nota.operacoes.length > 0) {
+            nota.operacoes.forEach(op => {
+                const tipoOp = op.tipo.charAt(0).toUpperCase() + op.tipo.slice(1);
+                const precoMedio = op.quantidade > 0 ? op.valor / op.quantidade : 0;
+                tooltipContent += `• ${tipoOp} ${op.quantidade} ${op.ativo} a ${formatarMoeda(precoMedio)}\n`;
+            });
+        } else {
+            tooltipContent += "• Sem operações.\n";
+        }
+
+        // --- HTML da Linha ---
+        // Alteração Principal: Coluna de Ações com Flexbox Horizontal
+        htmlLinhas += `
+            <tr>
+                <td>${dataFormatada}</td>
+                <td style="font-weight: 500;">${nota.corretora}</td>
+                <td>
+                    ${nota.numero}
+                    <i class="fas fa-info-circle icone-detalhes-js" 
+                       style="color: #3498db; margin-left: 8px; cursor: help;" 
+                       data-tooltip-content="${tooltipContent}"></i>
+                </td>
+                <td class="text-center"><span class="badge badge-light" style="border: 1px solid #ddd;">${nota.operacoes.length}</span></td>
+                <td>${dataLiquidacao}</td>
+                <td class="numero" style="font-weight: bold;">${formatarValorComCeD(valorLiquido)}</td>
+                
+                <td class="controles-col">
+                    <div style="display: flex; gap: 5px; justify-content: flex-end;">
+                        <button class="btn btn-sm btn-info edit" data-note-id="${nota.id}" title="Editar" style="color: white; padding: 2px 8px;">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-secondary delete" data-note-id="${nota.id}" title="Excluir" style="color: white; padding: 2px 8px;">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
         `;
-        body.appendChild(tr);
+    });
+
+    tbody.innerHTML = htmlLinhas;
+
+    // --- Renderização: Cards de Resumo ---
+    const corSaldo = totalLiquidoGeral >= 0 ? '#2ecc71' : '#e74c3c';
+    summaryContainer.innerHTML = `
+        <div class="dash-summary-card">
+            <div class="dash-card-title">Notas Exibidas</div>
+            <div class="dash-card-value">${notasParaRenderizar.length}</div>
+        </div>
+        <div class="dash-summary-card">
+            <div class="dash-card-title">Custos Totais</div>
+            <div class="dash-card-value" style="color: #e74c3c;">${formatarMoeda(totalCustosGeral)}</div>
+        </div>
+        <div class="dash-summary-card" style="border-bottom: 4px solid ${corSaldo};">
+            <div class="dash-card-title">Fluxo Líquido</div>
+            <div class="dash-card-value" style="color: ${corSaldo};">${formatarValorComCeD(totalLiquidoGeral)}</div>
+        </div>
+    `;
+
+    // --- 2. Ativação dos Eventos do Tooltip ---
+    const icones = tbody.querySelectorAll('.icone-detalhes-js');
+    
+    icones.forEach(icone => {
+        icone.addEventListener('mouseenter', (e) => {
+            const texto = e.target.getAttribute('data-tooltip-content');
+            tooltipDiv.innerText = texto;
+            tooltipDiv.style.display = 'block';
+            tooltipDiv.style.top = (e.clientY + 15) + 'px';
+            tooltipDiv.style.left = (e.clientX + 15) + 'px';
+        });
+
+        icone.addEventListener('mousemove', (e) => {
+            const larguraTooltip = tooltipDiv.offsetWidth;
+            let leftPos = e.clientX + 15;
+            if (leftPos + larguraTooltip > window.innerWidth) {
+                leftPos = e.clientX - larguraTooltip - 10;
+            }
+            tooltipDiv.style.top = (e.clientY + 15) + 'px';
+            tooltipDiv.style.left = leftPos + 'px';
+        });
+
+        icone.addEventListener('mouseleave', () => {
+            tooltipDiv.style.display = 'none';
+        });
     });
 }
 function renderizarTabelaOperacoes() { const tabelaOperacoesBody = document.getElementById('tabela-operacoes-body'); tabelaOperacoesBody.innerHTML = ''; if (!notaAtual || !notaAtual.operacoes) return; const custosNota = parseDecimal(document.getElementById('nota-custos').value) || 0; const irrfNota = parseDecimal(document.getElementById('nota-irrf').value) || 0; const valorTotalOperacoes = notaAtual.operacoes.reduce((acc, op) => acc + op.valor, 0); notaAtual.operacoes.forEach(op => { const tr = document.createElement('tr'); const valorOp = op.valor; const precoUnitario = op.quantidade > 0 ? valorOp / op.quantidade : 0; const custoRateado = valorTotalOperacoes > 0 ? (valorOp / valorTotalOperacoes) * (custosNota + irrfNota) : 0; const custoUnitarioRateado = op.quantidade > 0 ? custoRateado / op.quantidade : 0; const precoComCustos = op.tipo === 'compra' ? precoUnitario + custoUnitarioRateado : precoUnitario - custoUnitarioRateado; tr.innerHTML = `<td>${op.ativo}</td><td>${op.tipo.charAt(0).toUpperCase() + op.tipo.slice(1)}</td><td class="numero">${op.quantidade}</td><td class="numero">${formatarMoeda(precoUnitario)}</td><td class="numero">${formatarMoeda(valorOp)}</td><td class="numero">${formatarPrecoMedio(precoComCustos)}</td><td class="controles-col"><i class="fas fa-edit acao-btn edit" title="Editar" data-op-id="${op.id}"></i><i class="fas fa-trash acao-btn delete" title="Excluir" data-op-id="${op.id}"></i></td>`; tabelaOperacoesBody.appendChild(tr); }); }
-function atualizarTotais() { if (!notaAtual) return; notaAtual.custos = parseDecimal(document.getElementById('nota-custos').value) || 0; notaAtual.irrf = parseDecimal(document.getElementById('nota-irrf').value) || 0; const totalCompras = notaAtual.operacoes.filter(op => op.tipo === 'compra').reduce((acc, op) => acc + op.valor, 0); const totalVendas = notaAtual.operacoes.filter(op => op.tipo === 'venda').reduce((acc, op) => acc + op.valor, 0); const totalCustos = notaAtual.custos + notaAtual.irrf; const valorLiquido = totalVendas - totalCompras - totalCustos; document.getElementById('subtotal-compras').textContent = formatarMoeda(totalCompras); document.getElementById('subtotal-vendas').textContent = formatarMoeda(totalVendas); document.getElementById('subtotal-custos').textContent = formatarMoeda(totalCustos); document.getElementById('subtotal-liquido').textContent = formatarValorComCeD(valorLiquido); const dataNota = document.getElementById('nota-data').value; if(dataNota) { const dataLiquidacao = calcularDataLiquidacao(dataNota, 2); document.getElementById('subtotal-liquidacao').textContent = dataLiquidacao.toLocaleDateString('pt-BR'); } else { document.getElementById('subtotal-liquidacao').textContent = '--/--/----'; } }
-function iniciarNovaNota() {
-    notaAtual = { id: null, corretora: 'XP', data: '', numero: '', custos: null, irrf: null, operacoes: [] };
-    const formNotaGeral = document.getElementById('form-nota-geral');
-    formNotaGeral.reset();
-    
-    // Garante que os campos de custos e IRRF fiquem vazios para mostrar o placeholder
-    document.getElementById('nota-custos').value = '';
-    document.getElementById('nota-irrf').value = '';
-
-    const selectCorretora = document.getElementById('nota-corretora');
-    const corretorasAtivas = getCorretorasAtivasParaNotas();
-    // --- ALTERAÇÃO AQUI: Adiciona a opção "Selecione..." ---
-    selectCorretora.innerHTML = '<option value="">Selecione...</option>' + corretorasAtivas.map(c => `<option value="${c}">${c}</option>`).join('');
-    selectCorretora.value = ""; // Garante que "Selecione..." seja a opção padrão
-    // --- FIM DA ALTERAÇÃO ---
-    selectCorretora.disabled = false; // Garante que o dropdown esteja habilitado.
-    const tituloTela = document.querySelector('#tela-lancamento-nota h1');
-    if (tituloTela) {
-        tituloTela.textContent = 'Lançamento de Nota de Negociação';
-    }
-    inicializarIconesCalculadora();
-    renderizarTabelaOperacoes();
-    atualizarTotais();
-    mostrarTela('lancamentoNota');
-}
-
-
-function iniciarEdicaoOperacao(opId) {
-    const op = notaAtual.operacoes.find(o => o.id === opId);
-    if (!op) return;
-    modalEdicaoOperacao.style.display = 'block';
-    document.getElementById('edit-op-id').value = op.id;
-    document.getElementById('edit-op-ativo').value = op.ativo;
-    document.getElementById('edit-op-tipo').value = op.tipo;
-    document.getElementById('edit-op-quantidade').value = op.quantidade;
-    document.getElementById('edit-op-valor').value = formatarDecimalParaInput(op.valor);
-}
-
-
-
-
-
 function renderizarTelaEventosAtivos() {
     const container = document.getElementById('lista-de-eventos-ativos');
     const eventos = todosOsAjustes.filter(a => a.tipoAjuste === 'evento_ativo');
@@ -1836,7 +999,6 @@ function renderizarTelaEventosAtivos() {
     tableHtml += '</tbody></table>';
     container.innerHTML = tableHtml;
 }
-
 function renderizarTelaImportacaoNotas(notas) {
     mostrarTela('importacaoNotas');
     const container = document.getElementById('container-revisao-notas');
@@ -1902,20 +1064,13 @@ function popularDropdownsUniversais(selectDebitoId, selectCreditoId) {
     const selectDebito = document.getElementById(selectDebitoId);
     const selectCredito = document.getElementById(selectCreditoId);
 
-    // Tradução: Nenhuma
-    let optionsHtml = '<option value="">None</option>';
+    let optionsHtml = '<option value="">Nenhuma</option>';
     
-    // Tradução: Contas
-    optionsHtml += '<optgroup label="Accounts (BRL)">';
+    optionsHtml += '<optgroup label="Contas (BRL)">';
     getTodasContasAtivas()
         .sort((a,b) => a.banco.localeCompare(b.banco))
         .forEach(c => {
-            // Tradução do tipo de conta embutido
-            let tipoContaFmt = c.tipo;
-            if (c.tipo === 'Conta Corrente') tipoContaFmt = 'Current Account';
-            if (c.tipo === 'Conta Investimento') tipoContaFmt = 'Investment Account';
-            if (c.tipo === 'Poupança') tipoContaFmt = 'Savings';
-            optionsHtml += `<option value="brl_${c.id}">${c.banco} - ${tipoContaFmt}</option>`;
+            optionsHtml += `<option value="brl_${c.id}">${c.banco} - ${c.tipo}</option>`;
         });
     optionsHtml += '</optgroup>';
 
@@ -1926,8 +1081,7 @@ function popularDropdownsUniversais(selectDebitoId, selectCreditoId) {
     }, {});
 
     Object.keys(ativosPorMoeda).sort().forEach(moeda => {
-        // Tradução: Ativos
-        optionsHtml += `<optgroup label="Assets (${moeda})">`;
+        optionsHtml += `<optgroup label="Ativos (${moeda})">`;
         ativosPorMoeda[moeda].forEach(a => {
             optionsHtml += `<option value="moeda_${a.id}">${a.nomeAtivo}</option>`;
         });
@@ -1937,22 +1091,15 @@ function popularDropdownsUniversais(selectDebitoId, selectCreditoId) {
     selectDebito.innerHTML = optionsHtml;
     selectCredito.innerHTML = optionsHtml;
 }
-
 function popularDropdownAtivoRecorrente() {
     const selectAtivo = document.getElementById('transacao-moeda-ativo-recorrente');
-    // Tradução: Selecione
-    let optionsHtml = '<option value="">Select target...</option>';
+    let optionsHtml = '<option value="">Selecione o alvo...</option>';
     
-    // Tradução: Contas
-    optionsHtml += '<optgroup label="Accounts (BRL)">';
+    optionsHtml += '<optgroup label="Contas (BRL)">';
     getTodasContasAtivas()
         .sort((a,b) => a.banco.localeCompare(b.banco))
         .forEach(c => {
-            let tipoContaFmt = c.tipo;
-            if (c.tipo === 'Conta Corrente') tipoContaFmt = 'Current Account';
-            if (c.tipo === 'Conta Investimento') tipoContaFmt = 'Investment Account';
-            if (c.tipo === 'Poupança') tipoContaFmt = 'Savings';
-            optionsHtml += `<option value="brl_${c.id}">${c.banco} - ${tipoContaFmt}</option>`;
+            optionsHtml += `<option value="brl_${c.id}">${c.banco} - ${c.tipo}</option>`;
         });
     optionsHtml += '</optgroup>';
 
@@ -1963,8 +1110,7 @@ function popularDropdownAtivoRecorrente() {
     }, {});
 
     Object.keys(ativosPorMoeda).sort().forEach(moeda => {
-        // Tradução: Ativos
-        optionsHtml += `<optgroup label="Assets (${moeda})">`;
+        optionsHtml += `<optgroup label="Ativos (${moeda})">`;
         ativosPorMoeda[moeda].forEach(a => {
             optionsHtml += `<option value="moeda_${a.id}">${a.nomeAtivo}</option>`;
         });
@@ -1973,7 +1119,6 @@ function popularDropdownAtivoRecorrente() {
 
     selectAtivo.innerHTML = optionsHtml;
 }
-
 
 function abrirModalEdicaoTransacaoProvento(transacaoId = null, eventoIdProvento = null) {
     let transacao, proventoOriginal;
@@ -1994,30 +1139,76 @@ function abrirModalEdicaoTransacaoProvento(transacaoId = null, eventoIdProvento 
         });
     }
 
-    // Tradução: Erros
-    if (!transacao) { alert("Error: Income transaction not found."); return; }
+    if (!transacao) { alert("Erro: Transação do provento não encontrada."); return; }
     
     proventoOriginal = todosOsProventos.find(p => p.id === transacao.sourceId);
-    if (!proventoOriginal) { alert("Error: Original income record not found."); return; }
+    if (!proventoOriginal) { alert("Erro: O registro de provento original não foi encontrado."); return; }
     
     document.getElementById('edit-trans-provento-id').value = transacao.id;
     document.getElementById('edit-trans-provento-ticker').value = proventoOriginal.ticker;
-    // Tradução dos tipos
-    let tipoProvFmt = proventoOriginal.tipo;
-    if (proventoOriginal.tipo === 'Rendimento') tipoProvFmt = 'Yield';
-    if (proventoOriginal.tipo === 'Dividendo') tipoProvFmt = 'Dividend';
-    if (proventoOriginal.tipo === 'Bonificação') tipoProvFmt = 'Bonus';
-    if (proventoOriginal.tipo === 'Outros') tipoProvFmt = 'Others';
-    document.getElementById('edit-trans-provento-tipo').value = tipoProvFmt;
-    // Data no padrão britânico
-    document.getElementById('edit-trans-provento-data').value = new Date(proventoOriginal.dataPagamento + 'T12:00:00').toLocaleDateString('en-GB');
+    document.getElementById('edit-trans-provento-tipo').value = proventoOriginal.tipo;
+    document.getElementById('edit-trans-provento-data').value = new Date(proventoOriginal.dataPagamento + 'T12:00:00').toLocaleDateString('pt-BR');
     document.getElementById('edit-trans-provento-valor').value = formatarDecimalParaInput(transacao.valor);
     
     abrirModal('modal-edicao-transacao-provento');
     document.getElementById('edit-trans-provento-valor').focus();
 }
+function gerarHtmlExtratoParaConta(conta, dataInicio, dataFim) {
+    const todosOsEventos = obterTodosOsEventosDeCaixa();
+    const hojeStr = new Date().toISOString().split('T')[0];
+    const dataInicioObj = new Date(dataInicio + 'T00:00:00');
 
+    const eventosPassados = todosOsEventos.filter(e => e.tipo === 'conta' && String(e.idAlvo) === String(conta.id) && e.source !== 'recorrente_futura' && new Date(e.data + 'T12:00:00') < dataInicioObj && new Date(e.data + 'T12:00:00') >= new Date(conta.dataSaldoInicial + 'T12:00:00'));
+    const saldoInicialDaLinha = eventosPassados.reduce((acc, t) => acc + arredondarMoeda(t.valor), conta.saldoInicial);
+    
+    const transacoesParaExibicao = todosOsEventos.filter(e => e.tipo === 'conta' && String(e.idAlvo) === String(conta.id) && e.data >= dataInicio && e.data <= dataFim && e.data >= conta.dataSaldoInicial).sort((a, b) => new Date(a.data + 'T12:00:00') - new Date(b.data + 'T12:00:00'));
 
+    let saldoCorrente = arredondarMoeda(saldoInicialDaLinha);
+    let corpoTabela = `<tr><td>${new Date(dataInicio + 'T12:00:00').toLocaleDateString('pt-BR')}</td><td>Saldo em ${new Date(dataInicio + 'T12:00:00').toLocaleDateString('pt-BR')}</td><td class="numero"></td><td class="numero ${saldoCorrente < 0 ? 'valor-negativo' : ''}">${formatarMoeda(saldoCorrente)}</td><td class="controles-col"></td></tr>`;
+
+    transacoesParaExibicao.forEach(evento => {
+        saldoCorrente = arredondarMoeda(saldoCorrente + evento.valor);
+        let controles = '', linhaClasse = evento.data === hojeStr ? 'data-hoje-bg' : '';
+
+        // Bloco de moedas recorrentes/futuras
+        if (evento.source === 'recorrente_futura') {
+            linhaClasse += ' transacao-futura';
+            controles = `
+                <i class="fas fa-check-circle acao-btn-recorrente" title="Confirmar esta ocorrência" data-mae-id="${evento.maeId}" data-ocorrencia-data="${evento.data}" data-action="CONFIRMAR_OCORRENCIA"></i>
+                <i class="fas fa-pencil-alt acao-btn-recorrente" title="Ações para esta ocorrência/série" data-mae-id="${evento.maeId}" data-ocorrencia-data="${evento.data}" data-action="ABRIR_MODAL_ACOES_RECORRENTE"></i>
+                <i class="fas fa-times-circle acao-btn-recorrente" title="Pular esta ocorrência" data-mae-id="${evento.maeId}" data-ocorrencia-data="${evento.data}" data-action="PULAR_OCORRENCIA"></i>
+            `;
+        } else {
+            if (evento.source === 'manual' || evento.source === 'recorrente_confirmada' || evento.transferenciaId) {
+                controles += `<i class="fas fa-edit acao-btn edit" title="Editar Transação" data-id="${evento.id}" data-type="conta"></i>`;
+                controles += `<i class="fas fa-trash acao-btn delete" title="Excluir Transação" data-id="${evento.id}" data-type="conta"></i>`;
+            
+            } else if (evento.source === 'provento' || evento.source === 'provento_editado') {
+                controles += `<i class="fas fa-edit acao-btn edit" title="Editar Valor do Provento" data-transacao-provento-id="${evento.id}"></i>`;
+            
+            } else if (evento.source === 'aporte_rf' || evento.source === 'resgate_rf') {
+                controles += `<i class="fas fa-edit acao-btn edit" title="Editar Movimentação de RF" data-mov-rf-id="${evento.id}"></i>`;
+                controles += `<i class="fas fa-trash acao-btn delete" title="Excluir Movimentação de RF" data-mov-rf-id="${evento.id}"></i>`;
+            
+            } else if (evento.source === 'nota') {
+                controles += `<i class="fas fa-lock" title="Transação da Nota de Negociação. Edite a nota para alterar."></i>`;
+            }
+        }
+
+        corpoTabela += `<tr class="${linhaClasse.trim()}">
+            <td>${new Date(evento.data + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+            <td>${evento.descricao}</td>
+            <td class="numero ${evento.valor < 0 ? 'valor-negativo' : 'valor-positivo'}">${formatarMoeda(evento.valor)}</td>
+            <td class="numero coluna-saldo ${saldoCorrente < 0 ? 'valor-negativo' : ''}">${formatarMoeda(saldoCorrente)}</td>
+            <td class="controles-col">${controles}</td>
+        </tr>`;
+    });
+
+    const saldoRealHoje = calcularSaldoEmData(conta, hojeStr);
+    const temMovimentoHoje = todosOsEventos.some(t => t.tipo === 'conta' && String(t.idAlvo) === String(conta.id) && t.source !== 'recorrente_futura' && t.data === hojeStr);
+
+    return { html: corpoTabela, saldoFinal: saldoRealHoje, temMovimentoHoje };
+}
 
 function renderizarTelaCaixaGlobal(manterEstadoMinimizado = false) {
     if (!telas.caixaGlobal || telas.caixaGlobal.style.display !== 'block') return;
@@ -2077,15 +1268,12 @@ function renderizarTelaCaixaGlobal(manterEstadoMinimizado = false) {
             }
         });
 
-        // Tradução: Saldo Atual
-        let tituloSaldoHtml = `<span class="saldo-titulo">(Current Balance: ${formatarValor(saldoAtualGrupo, moeda)})</span>`;
+        let tituloSaldoHtml = `<span class="saldo-titulo">(Saldo Atual: ${formatarValor(saldoAtualGrupo, moeda)})</span>`;
         if (moeda === 'BRL') {
-            // Tradução: Saldo Atual / Saldo D+2
-            tituloSaldoHtml = `<span class="saldo-titulo">(Current Balance: ${formatarValor(saldoAtualGrupo, 'BRL')} | D+2 Balance: ${formatarMoeda(saldoFuturoGrupo)})</span>`;
+            tituloSaldoHtml = `<span class="saldo-titulo">(Saldo Atual: ${formatarValor(saldoAtualGrupo, 'BRL')} | Saldo D+2: ${formatarMoeda(saldoFuturoGrupo)})</span>`;
         }
-        
-        // Tradução: Contas em...
-        grupoContainer.innerHTML = `<h2 style="margin: 20px 0 10px 0;">Accounts in ${moeda} ${tituloSaldoHtml}</h2>`;
+
+        grupoContainer.innerHTML = `<h2 style="margin: 20px 0 10px 0;">Contas em ${moeda} ${tituloSaldoHtml}</h2>`;
         
         const colunasContainer = document.createElement('div');
         colunasContainer.className = 'colunas-view';
@@ -2106,29 +1294,22 @@ function renderizarTelaCaixaGlobal(manterEstadoMinimizado = false) {
             
             let minimizedClass = manterEstadoMinimizado ? (estadosMinimizados.has(itemId) ? 'minimized' : '') : (temMovimentoHoje ? '' : 'minimized');
             
-            // Tradução de tipo conta para inglês no header
-            let tipoContaFmt = item.tipo;
-            if (item.tipo === 'Conta Corrente') tipoContaFmt = 'Current Account';
-            if (item.tipo === 'Conta Investimento') tipoContaFmt = 'Investment Account';
-            if (item.tipo === 'Poupança') tipoContaFmt = 'Savings';
-            const nomeExibicao = isBRL ? `${item.banco} - ${tipoContaFmt}` : item.nomeAtivo;
-            
+            const nomeExibicao = isBRL ? `${item.banco} - ${item.tipo}` : item.nomeAtivo;
             const nomeEsaldoMinimizado = `${nomeExibicao} <span class='saldo-minimizado'>${formatarValor(saldoAtual, moeda)}</span> <span class='saldo-futuro-minimizado'>D+2: ${formatarValor(saldoFuturo, moeda)}</span>`;
             
             let controlesHeader = '';
             if(!isBRL){
-                 controlesHeader = `<i class="fas fa-edit acao-btn edit" title="Edit Asset" data-ativo-moeda-id="${item.id}"></i>
-                                    <i class="fas fa-trash acao-btn delete" title="Delete Asset" data-ativo-moeda-id="${item.id}"></i>`;
+                 controlesHeader = `<i class="fas fa-edit acao-btn edit" title="Editar Ativo" data-ativo-moeda-id="${item.id}"></i>
+                                    <i class="fas fa-trash acao-btn delete" title="Excluir Ativo" data-ativo-moeda-id="${item.id}"></i>`;
             } else {
-                 controlesHeader = `<i class="fas fa-edit acao-btn edit" title="Edit Account" data-conta-id="${item.id}"></i>`;
+                 controlesHeader = `<i class="fas fa-edit acao-btn edit" title="Editar Conta" data-conta-id="${item.id}"></i>`;
             }
 
             let headerDetailsHtml = '';
             if (isBRL && (item.agencia || item.numero || item.pix)) {
-                // Tradução no cabeçalho das infos BRL
                 headerDetailsHtml += '<div class="conta-header-details">';
-                if (item.agencia) headerDetailsHtml += `<span>Branch: <strong>${item.agencia}</strong></span>`;
-                if (item.numero) headerDetailsHtml += `<span>Account: <strong>${item.numero}</strong></span>`;
+                if (item.agencia) headerDetailsHtml += `<span>Ag: <strong>${item.agencia}</strong></span>`;
+                if (item.numero) headerDetailsHtml += `<span>Conta: <strong>${item.numero}</strong></span>`;
                 if (item.pix) headerDetailsHtml += `<span>Pix: <strong>${item.pix}</strong></span>`;
                 headerDetailsHtml += '</div>';
             }
@@ -2144,13 +1325,13 @@ function renderizarTelaCaixaGlobal(manterEstadoMinimizado = false) {
                         ${headerDetailsHtml}
                     </div>
                     <div>
-                        <span class="saldo-header ${saldoClasse}" title="Balance in BRL: ${formatarMoeda(saldoEmReais)}">${formatarValor(saldoAtual, moeda)}</span>
-                        <span class="saldo-futuro-header">D+2 (${dataFuturaD2.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })}): ${formatarValor(saldoFuturo, moeda)}</span>
+                        <span class="saldo-header ${saldoClasse}" title="Saldo em BRL: ${formatarMoeda(saldoEmReais)}">${formatarValor(saldoAtual, moeda)}</span>
+                        <span class="saldo-futuro-header">D+2 (${dataFuturaD2.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}): ${formatarValor(saldoFuturo, moeda)}</span>
                         ${controlesHeader}
                     </div>
                 </div>
                 <table>
-                    <thead><tr><th>Date</th><th>Description</th><th class="numero">Value</th><th class="numero">Balance</th><th class="controles-col"></th></tr></thead>
+                    <thead><tr><th>Data</th><th>Descrição</th><th class="numero">Valor</th><th class="numero">Saldo</th><th class="controles-col"></th></tr></thead>
                     <tbody>${html}</tbody>
                 </table>
             `;
@@ -2161,225 +1342,46 @@ function renderizarTelaCaixaGlobal(manterEstadoMinimizado = false) {
         container.appendChild(grupoContainer);
     });
 }
-
-function calcularResumoProventosParaMultiplosAtivos(proventosFiltrados, tickers, dataInicioFiltro, dataFimFiltro) {
-    let projecaoAnualTotalAgregada = 0;
-    let custoTotalAgregado = 0;
-    let valorMercadoTotalAgregado = 0;
-
-    const hoje = new Date().toISOString().split('T')[0];
-    const posicoesAtuais = gerarPosicaoDetalhada();
-
-    tickers.forEach(ticker => {
-        const posicaoAtualAtivo = posicoesAtuais[ticker];
-        if (!posicaoAtualAtivo || posicaoAtualAtivo.quantidade <= 0) return;
-
-        // --- CORREÇÃO APLICADA AQUI ---
-        // A data de início e fim agora é calculada para CADA ticker, individualmente,
-        // dentro do loop, em vez de uma vez só para o grupo todo.
-        const dataInicioTicker = dataInicioFiltro || getInicioInvestimento([ticker]);
-        const dataFimTicker = dataFimFiltro || getFimInvestimento([ticker]);
-        // --- FIM DA CORREÇÃO ---
-
-        const projecaoAnualUnitaria = calcularProjecaoAnualUnitaria(ticker, {
-            dataInicio: dataInicioTicker,
-            dataFim: dataFimTicker,
-            proventosParaCalculo: proventosFiltrados
-        });
-
-        const projecaoAnualTotal = projecaoAnualUnitaria * posicaoAtualAtivo.quantidade;
-
-        projecaoAnualTotalAgregada += projecaoAnualTotal;
-        custoTotalAgregado += posicaoAtualAtivo.quantidade * posicaoAtualAtivo.precoMedio;
-
-        const cotacao = dadosDeMercado.cotacoes[ticker];
-        valorMercadoTotalAgregado += (cotacao && cotacao.valor > 0) ? posicaoAtualAtivo.quantidade * cotacao.valor : 0;
-    });
-
-    const mediaMensalTotalAgregada = projecaoAnualTotalAgregada / 12;
-    const yocCustoAnualAgregado = custoTotalAgregado > 0 ? projecaoAnualTotalAgregada / custoTotalAgregado : 0;
-    const yieldMercadoAnualAgregado = valorMercadoTotalAgregado > 0 ? projecaoAnualTotalAgregada / valorMercadoTotalAgregado : 0;
-
-    const dividendoTotalPeriodo = proventosFiltrados.reduce((acc, p) => acc + p.valorTotalRecebido, 0);
+function abrirModalLancamentoProvento(proventoParaEditar = null, tickerPreenchido = '') {
+    const form = document.getElementById('form-lancamento-provento');
+    form.reset();
+    const tituloModal = document.getElementById('provento-modal-titulo');
     
-    const mediaMensalPorUnidade = (tickers.length === 1 && posicoesAtuais[tickers[0]]?.quantidade > 0) ? mediaMensalTotalAgregada / posicoesAtuais[tickers[0]].quantidade : 0;
+    if (proventoParaEditar) {
+        tituloModal.textContent = 'Editar Provento';
+        document.getElementById('provento-id').value = proventoParaEditar.id;
+        document.getElementById('provento-ativo').value = proventoParaEditar.ticker;
+        document.getElementById('provento-data-com').value = proventoParaEditar.dataCom;
+        document.getElementById('provento-data-pagamento').value = proventoParaEditar.dataPagamento;
+        document.getElementById('provento-tipo').value = proventoParaEditar.tipo;
 
-    return {
-        dividendoTotalPeriodo,
-        projecaoAnualTotal: projecaoAnualTotalAgregada,
-        mediaMensalTotal: mediaMensalTotalAgregada,
-        yocCustoAnual: yocCustoAnualAgregado,
-        yocCustoMensal: yocCustoAnualAgregado / 12,
-        yieldMercadoAnual: yieldMercadoAnualAgregado,
-        yieldMercadoMensal: yieldMercadoAnualAgregado / 12,
-        mediaMensalPorUnidade: mediaMensalPorUnidade
-    };
-}
-
-function renderizarTabelaProventos() {
-    const container = document.getElementById('lista-de-proventos');
-    const summaryContainer = document.getElementById('proventos-summary-container');
-    const summaryTitulo = document.getElementById('proventos-summary-titulo');
-    
-    const tableHeaders = `
-        <th class="sortable" data-key="ticker">Ativo</th>
-        <th class="sortable" data-key="tipo">Tipo</th>
-        <th class="sortable" data-key="dataCom">Data Com</th>
-        <th class="sortable" data-key="dataPagamento">Data Pag.</th>
-        <th class="numero sortable col-provento-valor" data-key="valorIndividual">Provento por Unidade</th>
-        <th class="numero col-provento-qtd">Qtd. Na Data</th>
-        <th class="numero col-provento-valor">Preço Médio (Data Com)</th>
-        <th class="numero col-provento-valor">Total Recebido</th>
-        <th class="percentual col-provento-yoc">YOC</th>
-        <th>Detalhes</th>
-        <th class="controles-col">Controles</th>`;
-    container.innerHTML = `<table><thead><tr>${tableHeaders}</tr></thead><tbody></tbody></table>`;
-    
-    const body = container.querySelector('tbody');
-    const hojeStr = new Date().toISOString().split('T')[0];
-    const hojeMeiaNoite = new Date(hojeStr + 'T00:00:00');
-
-    const proventosFiltrados = obterProventosFiltrados();
-
-    const filtroAtivo = document.getElementById('provento-filtro-ativo').value;
-    const filtroTipo = document.getElementById('provento-filtro-tipo').value;
-    const filtroStatus = document.getElementById('provento-filtro-status').value;
-    const filtroDataDe = document.getElementById('provento-filtro-data-de').value;
-    const filtroDataAte = document.getElementById('provento-filtro-data-ate').value;
-    
-    let tooltipTitle = `Exportar ${proventosFiltrados.length} proventos exibidos.`;
-    const filtrosAtivos = [];
-    const statusMap = { receber: 'A Receber', recebido: 'Recebidos' };
-    
-    if (filtroDataDe || filtroDataAte) filtrosAtivos.push(`Período: ${filtroDataDe || 'Início'} a ${filtroDataAte || 'Fim'}`);
-    if (filtroAtivo) filtrosAtivos.push(`Ativo: ${filtroAtivo.toUpperCase()}`);
-    if (filtroTipo !== 'todos') filtrosAtivos.push(`Tipo: ${filtroTipo}`);
-    if (filtroStatus !== 'todos') filtrosAtivos.push(`Status: ${statusMap[filtroStatus]}`);
-
-    if (filtrosAtivos.length > 0) {
-        tooltipTitle += "\n\nFiltros Ativos:\n- " + filtrosAtivos.join('\n- ');
-    }
-    
-    const btnExportar = document.getElementById('btn-exportar-proventos');
-    if (btnExportar) {
-        btnExportar.setAttribute('data-tooltip', tooltipTitle);
-    }
-
-    const sortedProventos = [...proventosFiltrados].sort((a, b) => {
-        const key = sortConfigProventos.key;
-        const direction = sortConfigProventos.direction === 'ascending' ? 1 : -1;
-        const valA = key.includes('data') ? new Date(a[key]) : (a[key] || '');
-        const valB = key.includes('data') ? new Date(b[key]) : (b[key] || '');
-        if (valA < valB) return -1 * direction;
-        if (valA > valB) return 1 * direction;
-        return 0;
-    });
-
-    summaryContainer.style.display = 'block';
-    const tickersUnicos = [...new Set(sortedProventos.map(p => p.ticker))];
-    if (tickersUnicos.length > 0) {
-        const resumo = calcularResumoProventosParaMultiplosAtivos(proventosFiltrados, tickersUnicos, filtroDataDe, filtroDataAte);        
-        const dataInicio = filtroDataDe || getInicioInvestimento(tickersUnicos);
-        const dataFim = filtroDataAte || getFimInvestimento(tickersUnicos);
-        const dataInicioFmt = dataInicio ? new Date(dataInicio + 'T12:00:00').toLocaleDateString('pt-BR') : 'Início';
-        const dataFimFmt = dataFim ? new Date(dataFim + 'T12:00:00').toLocaleDateString('pt-BR') : 'Fim';
+        const valorBruto = proventoParaEditar.valorBrutoIndividual !== undefined 
+            ? proventoParaEditar.valorBrutoIndividual 
+            : (proventoParaEditar.tipo === 'JCP' ? (proventoParaEditar.valorIndividual / 0.85) : proventoParaEditar.valorIndividual);
         
-        summaryTitulo.textContent = `Resumo do Período de ${dataInicioFmt} até ${dataFimFmt}`;        
-        document.getElementById('summary-dividendo-total').textContent = formatarMoeda(resumo.dividendoTotalPeriodo);
-        document.getElementById('summary-projecao-anual').textContent = formatarMoeda(resumo.projecaoAnualTotal);
-        document.getElementById('summary-media-mensal').textContent = formatarMoeda(resumo.mediaMensalTotal);
-        document.getElementById('summary-yoc-anual').textContent = formatarPercentual(resumo.yocCustoAnual);
-        document.getElementById('summary-yoc-mensal').textContent = formatarPercentual(resumo.yocCustoMensal);
-        document.getElementById('summary-yield-mercado-anual').textContent = formatarPercentual(resumo.yieldMercadoAnual);
-        document.getElementById('summary-yield-mercado-mensal').textContent = formatarPercentual(resumo.yieldMercadoMensal);
+        const irPercent = proventoParaEditar.percentualIR !== undefined 
+            ? proventoParaEditar.percentualIR 
+            : (proventoParaEditar.tipo === 'JCP' ? 15 : 0);
 
-        // --- INÍCIO DA ALTERAÇÃO ---
-        if (tickersUnicos.length === 1) {
-            // Calcula o total pago por unidade no período filtrado
-            const totalPagoPorUnidade = proventosFiltrados.reduce((acc, p) => acc + p.valorIndividual, 0);
-            
-            // Exibe o container e preenche os dois valores
-            const containerUnidade = document.getElementById('summary-media-unidade-container');
-            containerUnidade.style.display = 'flex'; // Usar 'flex' para alinhar os itens
-            document.getElementById('summary-media-unidade-valor').textContent = formatarMoeda(resumo.mediaMensalPorUnidade);
-            document.getElementById('summary-total-unidade-valor').textContent = formatarMoeda(totalPagoPorUnidade);
-        } else {
-             document.getElementById('summary-media-unidade-container').style.display = 'none';
-        }
-        // --- FIM DA ALTERAÇÃO ---
+        document.getElementById('provento-valor-individual').value = formatarDecimalParaInput(valorBruto);
+        document.getElementById('provento-ir').value = irPercent > 0 ? formatarDecimalParaInput(irPercent) : ''; 
+        document.getElementById('provento-valor-individual').previousElementSibling.textContent = 'Valor Bruto por Unidade (R$)';
+
     } else {
-        summaryTitulo.textContent = `Resumo do Período`;
-        document.getElementById('summary-dividendo-total').textContent = formatarMoeda(0);
-        document.getElementById('summary-projecao-anual').textContent = formatarMoeda(0);
-        document.getElementById('summary-media-mensal').textContent = formatarMoeda(0);
-        document.getElementById('summary-yoc-anual').textContent = formatarPercentual(0);
-        document.getElementById('summary-yoc-mensal').textContent = formatarPercentual(0);
-        document.getElementById('summary-yield-mercado-anual').textContent = formatarPercentual(0);
-        document.getElementById('summary-yield-mercado-mensal').textContent = formatarPercentual(0);
-        document.getElementById('summary-media-unidade-container').style.display = 'none';
+        tituloModal.textContent = 'Lançar Provento';
+        document.getElementById('provento-id').value = '';
+        document.getElementById('provento-ativo').value = tickerPreenchido.toUpperCase(); 
+        document.getElementById('provento-valor-individual').previousElementSibling.textContent = 'Valor Bruto por Unidade (R$)';
     }
-
-    if (sortedProventos.length === 0) {
-        body.innerHTML = '<tr><td colspan="11" style="text-align:center;">Nenhum provento encontrado para os filtros selecionados.</td></tr>';
-        return;
+    
+    abrirModal('modal-lancamento-provento');
+    
+    if (tickerPreenchido) {
+        document.getElementById('provento-tipo').focus();
+    } else {
+        document.getElementById('provento-ativo').focus();
     }
-
-    sortedProventos.forEach(p => {
-        const tr = document.createElement('tr');
-        tr.dataset.id = p.id;
-        if (new Date(p.dataPagamento + 'T12:00:00') >= hojeMeiaNoite) tr.classList.add('pagamento-futuro');
-        
-        if(isProventosEditMode) {
-             tr.innerHTML = `
-                <td><input type="text" class="ticker-input edit-field" style="width: 80px;" data-field="ticker" value="${p.ticker}"></td>
-                <td>${p.tipo}</td>
-                <td><input type="date" class="edit-field" style="width: 130px;" data-field="dataCom" value="${p.dataCom}"></td>
-                <td><input type="date" class="edit-field" style="width: 130px;" data-field="dataPagamento" value="${p.dataPagamento}"></td>
-                <td class="numero"><input type="text" style="width: 100px;" class="numero edit-field" data-field="valorIndividual" value="${formatarDecimalParaInput(p.valorIndividual)}"></td>
-                <td class="numero">${Math.round(p.quantidadeNaDataCom)}</td>
-                <td class="numero">${formatarPrecoMedio(p.precoMedioNaDataCom)}</td>
-                <td class="numero">${formatarMoeda(p.valorTotalRecebido)}</td>
-                <td class="percentual">${formatarPercentual(p.yieldOnCost)}</td>
-                <td>-</td>
-                <td class="controles-col"><i class="fas fa-lock" title="Saia do modo de edição para excluir"></i></td>
-             `;
-        } else {
-             let dataComFmt = p.dataCom ? new Date(p.dataCom + 'T12:00:00').toLocaleDateString('pt-BR') : 'Data Inválida';
-             if (p.dataCom === hojeStr) dataComFmt = `<span class="data-hoje">${dataComFmt}</span>`;
-             let dataPagFmt = p.dataPagamento ? new Date(p.dataPagamento + 'T12:00:00').toLocaleDateString('pt-BR') : 'Data Inválida';
-             if (p.dataPagamento === hojeStr) dataPagFmt = `<span class="data-hoje">${dataPagFmt}</span>`;
-             let detalhesCorretoras = Object.entries(p.posicaoPorCorretora).map(([nome, dados]) => `${nome}: ${Math.round(dados.quantidade)} / ${formatarMoeda(dados.valorRecebido)}`).join('<br>');
-             if (!detalhesCorretoras) detalhesCorretoras = 'N/A';
-             const warningIcon = !todosOsAtivos.find(a => a.ticker === p.ticker)?.tipo ? `<i class="fas fa-exclamation-triangle warning-icon" title="Ativo com cadastro incompleto."></i>` : '';
-             
-             tr.innerHTML = `
-                <td>${p.ticker} ${warningIcon}</td>
-                <td>${p.tipo}</td>
-                <td>${dataComFmt}</td>
-                <td>${dataPagFmt}</td>
-                <td class="numero col-provento-valor">${formatarPrecoMedio(p.valorIndividual)}</td>
-                <td class="numero col-provento-qtd">${Math.round(p.quantidadeNaDataCom)}</td>
-                <td class="numero col-provento-valor">${formatarPrecoMedio(p.precoMedioNaDataCom)}</td>
-                <td class="numero col-provento-valor">${formatarMoeda(p.valorTotalRecebido)}</td>
-                <td class="percentual col-provento-yoc">${formatarPercentual(p.yieldOnCost)}</td>
-                <td class="provento-details">${detalhesCorretoras}</td>
-                <td class="controles-col">
-                    <i class="fas fa-edit acao-btn edit" title="Editar Provento" data-provento-id="${p.id}"></i>
-                    <i class="fas fa-trash acao-btn delete" title="Excluir Provento" data-provento-id="${p.id}"></i>
-                </td>`;
-        }
-        body.appendChild(tr);
-    });
-
-    document.querySelectorAll('#lista-de-proventos .sortable').forEach(header => {
-        header.classList.remove('ascending', 'descending');
-        if (header.dataset.key === sortConfigProventos.key) {
-            header.classList.add(sortConfigProventos.direction);
-        }
-    });
 }
-
-
 function abrirModalCorrecaoProventosOrfaos(proventosOrfaos) {
     const container = document.getElementById('lista-proventos-orfaos-container');
     const corretorasOptions = getTodasCorretoras().map(c => `<option value="${c}">${c}</option>`).join('');
@@ -2420,139 +1422,97 @@ function abrirModalCorrecaoProventosOrfaos(proventosOrfaos) {
     container.innerHTML = tableHtml;
     modalCorrigirProventosOrfaos.style.display = 'block';
 }
-
-function construirFluxoDeCaixa(tickers, dataFinal) {
-    const fluxos = [];
-    const datas = [];
-    const tickerSet = new Set(tickers);
-
-    // Saídas de Caixa (Compras)
-    todasAsNotas.forEach(n => {
-        n.operacoes.filter(op => tickerSet.has(op.ativo) && op.tipo === 'compra' && n.data <= dataFinal).forEach(op => {
-            // --- INÍCIO DA CORREÇÃO ---
-            // A lógica de rateio de custos foi corrigida para usar os custos corretos da nota
-            const totalOperacoesNota = n.operacoes.reduce((soma, op) => soma + op.valor, 0);
-            const custoRateado = totalOperacoesNota > 0 ? (op.valor / totalOperacoesNota) * (n.custos + n.irrf) : 0;
-            // --- FIM DA CORREÇÃO ---
-            fluxos.push(-(op.valor + custoRateado));
-            datas.push(n.data);
-        });
-    });
-    posicaoInicial.filter(p => tickerSet.has(p.ticker) && p.transacao && p.transacao.toLowerCase() === 'compra' && p.data <= dataFinal).forEach(p => {
-        fluxos.push(-(p.precoMedio * p.quantidade));
-        datas.push(p.data);
-    });
+function adicionarLinhaCorrecaoProvento(button) {
+    const container = button.closest('td').querySelector('.posicoes-por-corretora-wrapper');
+    const corretorasOptions = getTodasCorretoras().map(c => `<option value="${c}">${c}</option>`).join('');
     
-    posicaoInicial.filter(p => p.tipoRegistro === 'SUMARIO_MANUAL' && tickerSet.has(p.ticker) && p.data <= dataFinal).forEach(p => {
-        const quantidadeTotal = p.posicoesPorCorretora.reduce((soma, pc) => soma + pc.quantidade, 0);
-        const custoTotal = quantidadeTotal * p.precoMedio;
-        if (custoTotal > 0) {
-            fluxos.push(-custoTotal);
-            datas.push(p.data);
-        }
-    });
-
-    todosOsAjustes.filter(a => a.tipoAjuste === 'evento_ativo' && a.tipoEvento === 'entrada' && tickerSet.has(a.ticker) && a.data <= dataFinal).forEach(a => {
-        const qtdEntrada = a.detalhes.reduce((soma, d) => soma + d.quantidade, 0);
-        fluxos.push(-(qtdEntrada * (a.precoMedio || 0)));
-        datas.push(a.data);
-    });
-
-    // Entradas de Caixa (Vendas)
-    todasAsNotas.forEach(n => {
-        n.operacoes.filter(op => tickerSet.has(op.ativo) && op.tipo === 'venda' && n.data <= dataFinal).forEach(op => {
-             const totalOperacoesNota = n.operacoes.reduce((soma, op) => soma + op.valor, 0);
-            const custoRateado = totalOperacoesNota > 0 ? (op.valor / totalOperacoesNota) * n.custos : 0;
-            fluxos.push(op.valor - custoRateado);
-            datas.push(n.data);
-        });
-    });
-     posicaoInicial.filter(p => tickerSet.has(p.ticker) && p.transacao && p.transacao.toLowerCase() === 'venda' && p.data <= dataFinal).forEach(p => {
-        fluxos.push(p.valorVenda || 0);
-        datas.push(p.data);
-    });
-
-    todosOsAjustes.filter(a => a.tipoAjuste === 'evento_ativo' && a.tipoEvento === 'saida' && tickerSet.has(a.ticker) && a.data <= dataFinal).forEach(a => {
-        const dataAnterior = new Date(a.data + 'T12:00:00');
-        dataAnterior.setDate(dataAnterior.getDate() - 1);
-        const posAnterior = gerarPosicaoDetalhada(dataAnterior.toISOString().split('T')[0]);
-        const pmNaSaida = posAnterior[a.ticker]?.precoMedio || 0;
-        const qtdSaida = a.detalhes.reduce((soma, d) => soma + d.quantidade, 0);
-        fluxos.push(qtdSaida * pmNaSaida);
-        datas.push(a.data);
-    });
-
-    // Entradas de Caixa (Proventos)
-    todosOsProventos.filter(p => tickerSet.has(p.ticker) && p.dataPagamento && p.dataPagamento <= dataFinal).forEach(p => {
-        fluxos.push(p.valorTotalRecebido);
-        datas.push(p.dataPagamento);
-    });
-
-    const fluxosCombinados = fluxos.map((valor, i) => ({ valor, data: datas[i] }))
-        .sort((a, b) => new Date(a.data) - new Date(b.data));
-    
-    return {
-        fluxos: fluxosCombinados.map(f => f.valor),
-        datas: fluxosCombinados.map(f => f.data)
-    };
+    const div = document.createElement('div');
+    div.className = 'linha-corretora-correcao';
+    div.innerHTML = `
+        <select class="provento-correcao-corretora">
+            <option value="">Selecione...</option>
+            ${corretorasOptions}
+        </select>
+        <input type="number" min="1" step="1" class="provento-correcao-qtd" placeholder="Qtd.">
+        <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">
+            <i class="fas fa-trash"></i>
+        </button>
+    `;
+    container.appendChild(div);
 }
-
 function gerarHtmlTabelaAtivos(tipoAtivo, posicoesDetalhadas, filtroCorretora, valorTotalCarteira) {
-    // 1. Inicia com os tickers que o usuário possui na carteira para esta categoria.
+    // 1. Definição de Ativos (Mantida)
     const tickersEmPosicao = new Set(
         Object.keys(posicoesDetalhadas).filter(ticker => {
             const ativoInfo = todosOsAtivos.find(a => a.ticker === ticker);
             return ativoInfo && ativoInfo.tipo === tipoAtivo && posicoesDetalhadas[ticker].quantidade > 0.000001;
         })
     );
-
-    // 2. Adiciona os tickers que estão no plano de alocação para esta categoria.
     const tickersPlanejados = new Set(
         Object.keys(dadosAlocacao.ativos).filter(ticker => {
             const ativoInfo = todosOsAtivos.find(a => a.ticker === ticker);
             return ativoInfo && ativoInfo.tipo === tipoAtivo;
         })
     );
-
-    // 3. Combina as duas listas para ter a lista final de ativos a exibir.
     const tickersParaExibir = [...new Set([...tickersEmPosicao, ...tickersPlanejados])];
-
-    // 4. Busca os objetos completos dos ativos que serão exibidos.
     const ativosParaProcessar = tickersParaExibir.map(ticker => todosOsAtivos.find(a => a.ticker === ticker)).filter(Boolean);
 
-
-    // Pré-calcula os resultados realizados para todos os ativos de uma vez para otimização
+    // Pré-calcula resultados
     const tickersDaCategoria = ativosParaProcessar.map(a => a.ticker);
     const resultadosRealizadosMap = calcularResultadosRealizados(tickersDaCategoria);
 
+    // =================================================================================
+    // CORREÇÃO: LÓGICA DE SNAPSHOT ANTERIOR (D-1)
+    // =================================================================================
+    let precosAnterioresMap = {};
+    if (historicoCarteira && historicoCarteira.length > 0) {
+        // Usa a data do filtro (hoje) como referência
+        // Se filtroCorretora/filtroData estiverem no escopo superior, passamos como argumento, 
+        // mas aqui assumimos que 'filtroData' (string YYYY-MM-DD) ou 'new Date()' é a base.
+        // O ideal é pegar a data do input, mas para segurança usamos a data atual do sistema se não houver parametro explicito.
+        // Nota: A função recebe 'valorTotalCarteira', mas não 'filtroData' explicitamente no código anterior,
+        // mas vamos assumir que o cálculo é baseado em HOJE.
+        
+        const dataReferencia = new Date(); 
+        dataReferencia.setHours(0,0,0,0); // Zera hora para comparar apenas datas
+
+        // Filtra snapshots estritamente MENORES que hoje
+        const snapshotsPassados = historicoCarteira.filter(s => {
+            const dataSnap = new Date(s.data + 'T00:00:00');
+            return dataSnap < dataReferencia;
+        });
+
+        // Pega o último da lista filtrada (que deve ser ontem ou anteontem)
+        const snapshotAnterior = snapshotsPassados.length > 0 
+            ? snapshotsPassados[snapshotsPassados.length - 1] 
+            : null;
+
+        if (snapshotAnterior && snapshotAnterior.detalhesCarteira && snapshotAnterior.detalhesCarteira.ativos) {
+            Object.keys(snapshotAnterior.detalhesCarteira.ativos).forEach(t => {
+                precosAnterioresMap[t] = snapshotAnterior.detalhesCarteira.ativos[t].precoAtual || 0;
+            });
+        }
+    }
+    // =================================================================================
+
+    // 2. Processamento de Dados
     let dadosParaTabela = ativosParaProcessar.map(ativo => {
         if (!ativo) return null;
 
         const posTicker = posicoesDetalhadas[ativo.ticker];
         const quantidadeAtual = posTicker ? posTicker.quantidade : 0;
-        
         const quantidadeFiltrada = (filtroCorretora === 'consolidado') 
             ? quantidadeAtual 
             : (posTicker ? (posTicker.porCorretora[filtroCorretora] || 0) : 0);
         
-        // --- INÍCIO DA ALTERAÇÃO CORRIGIDA ---
         if (filtroCorretora !== 'consolidado') {
-            // Se um filtro de corretora estiver ativo, esconde QUALQUER ativo que não tenha posição nela.
-            if (quantidadeFiltrada < 0.000001) {
-                return null;
-            }
+            if (quantidadeFiltrada < 0.000001) return null;
         } else {
-            // Se estiver no "Consolidado", aplica a regra correta:
             if (quantidadeFiltrada < 0.000001) {
                 const percIdeal = dadosAlocacao.ativos[ativo.ticker];
-                // Esconde *APENAS SE* o ativo não estiver no plano de alocação.
-                // Se ele estiver (mesmo com percIdeal === 0), ele deve ser exibido.
-                if (percIdeal === undefined) {
-                    return null;
-                }
+                if (percIdeal === undefined) return null;
             }
         }
-        // --- FIM DA ALTERAÇÃO CORRIGIDA ---
 
         const cotacao = dadosDeMercado.cotacoes[ativo.ticker];
         const precoAtual = cotacao ? cotacao.valor : 0;
@@ -2571,16 +1531,24 @@ function gerarHtmlTabelaAtivos(tipoAtivo, posicoesDetalhadas, filtroCorretora, v
         const totalRetornado = proventosRecebidos + resultadoRealizado;
         const progressoBreakEven = custoTotal > 0 ? Math.min(1, totalRetornado / custoTotal) : 0;
 
+        // Variação Diária (Comparando Hoje vs D-1)
+        const precoAnterior = precosAnterioresMap[ativo.ticker] || 0;
+        let variacaoDiaPercentual = 0;
+        // Só calcula se existia preço anterior (evita divisão por zero ou saltos infinitos em ativos novos)
+        if (precoAnterior > 0 && precoAtual > 0) {
+            variacaoDiaPercentual = (precoAtual - precoAnterior) / precoAnterior;
+        }
+
         return {
             ticker: ativo.ticker,
-            // Tradução: fallback do nome
-            nome: ativo.nome || 'Name not registered',
+            nome: ativo.nome || 'Nome não cadastrado',
             quantidade: quantidadeFiltrada,
             precoMedio: precoMedio,
             precoAtual: precoAtual,
             custoTotal: custoTotal,
             valorDeMercado: valorDeMercado,
-            variacaoPercentual: precoMedio > 0 ? (precoAtual - precoMedio) / precoMedio : 0,
+            variacaoTotalPercentual: precoMedio > 0 ? (precoAtual - precoMedio) / precoMedio : 0,
+            variacaoDiaPercentual: variacaoDiaPercentual,
             yoc: precoMedio > 0 ? projecaoAnual / precoMedio : 0,
             dy: precoAtual > 0 ? projecaoAnual / precoAtual : 0,
             pl: (ativo.tipo === 'Ação' && cotacao?.lpa_acao > 0 && precoAtual > 0) ? precoAtual / cotacao.lpa_acao : 0,
@@ -2595,6 +1563,7 @@ function gerarHtmlTabelaAtivos(tipoAtivo, posicoesDetalhadas, filtroCorretora, v
         return { html: null, custoTotal: 0, valorMercado: 0 };
     }
     
+    // Ordenação
     const sortConfig = sortConfigRendaVariavel[tipoAtivo];
     dadosParaTabela.sort((a, b) => {
         const valA = a[sortConfig.key] || '';
@@ -2606,26 +1575,52 @@ function gerarHtmlTabelaAtivos(tipoAtivo, posicoesDetalhadas, filtroCorretora, v
         return 0;
     });
 
+    // Totais e Headers
     const custoTotalCategoria = dadosParaTabela.reduce((soma, item) => soma + item.custoTotal, 0);
     const valorMercadoCategoria = dadosParaTabela.reduce((soma, item) => soma + item.valorDeMercado, 0);
     const alocacaoIdealTotalCategoria = dadosParaTabela.reduce((soma, item) => soma + item.alocacaoIdeal, 0);
     const alocacaoAtualTotalCategoria = dadosParaTabela.reduce((soma, item) => soma + item.alocacaoAtual, 0);
     
     let additionalHeaders = '';
-    if (tipoAtivo === 'Ação') { additionalHeaders = '<th class="percentual sortable" data-key="yoc">YoC %</th><th class="percentual sortable" data-key="dy">DY %</th><th class="numero sortable" data-key="pl">P/E</th>'; } 
-    else if (tipoAtivo === 'FII') { additionalHeaders = '<th class="percentual sortable" data-key="yoc">YoC %</th><th class="percentual sortable" data-key="dy">DY %</th><th class="numero sortable" data-key="pvp">P/BV</th>'; }
+    if (tipoAtivo === 'Ação') { additionalHeaders = '<th class="percentual sortable" data-key="yoc">YoC %</th><th class="percentual sortable" data-key="dy">DY %</th><th class="numero sortable" data-key="pl">P/L</th>'; } 
+    else if (tipoAtivo === 'FII') { additionalHeaders = '<th class="percentual sortable" data-key="yoc">YoC %</th><th class="percentual sortable" data-key="dy">DY %</th><th class="numero sortable" data-key="pvp">P/VP</th>'; }
     
-    // Tradução dos Cabeçalhos
-    const headers = `<th class="sortable" data-key="ticker">Asset</th><th class="numero sortable" data-key="quantidade">Qty</th><th class="numero sortable" data-key="precoMedio">Avg Price</th><th class="numero sortable" data-key="precoAtual">Current Price</th><th class="percentual col-variacao sortable" data-key="variacaoPercentual">Var. %</th><th class="numero sortable" data-key="custoTotal">Total Cost</th><th class="numero sortable" data-key="valorDeMercado">Market Value</th>${additionalHeaders}<th class="coluna-alocacao sortable" data-key="alocacaoIdeal">Target Allocation (% Global)</th><th class="coluna-alocacao sortable" data-key="alocacaoAtual">Current Allocation (% Global)</th>`;
+    const headers = `<th class="sortable" data-key="ticker">Ativo</th><th class="numero sortable" data-key="quantidade">Qtd.</th><th class="numero sortable" data-key="precoMedio">PM</th><th class="numero sortable" data-key="precoAtual">Preço</th><th class="percentual col-variacao sortable" data-key="variacaoDiaPercentual">Var. Dia %</th><th class="numero sortable" data-key="custoTotal">Custo</th><th class="numero sortable" data-key="valorDeMercado">Mercado</th>${additionalHeaders}<th class="coluna-alocacao sortable" data-key="alocacaoIdeal">Ideal %</th><th class="coluna-alocacao sortable" data-key="alocacaoAtual">Atual %</th>`;
     
     let corpoTabela = '';
     dadosParaTabela.forEach(item => {
-        const nomeAbreviado = truncarTexto(item.nome, 15);
         const valorAlocacaoIdeal = valorTotalCarteira * item.alocacaoIdeal;
-        const diffPercent = item.variacaoPercentual;
-        let classePreco = '', desempenhoHtml = '-';
-        if (diffPercent > 0.0001) { classePreco = 'preco-maior'; desempenhoHtml = `<span class="preco-maior">↑ ${formatarPercentual(diffPercent)}</span>`; } 
-        else if (diffPercent < -0.0001) { classePreco = 'preco-menor'; desempenhoHtml = `<span class="preco-menor">↓ ${formatarPercentual(Math.abs(diffPercent))}</span>`; }
+        
+        // 1. Coluna Var. Dia %
+        const diffDia = item.variacaoDiaPercentual;
+        let htmlVarDia = '-';
+        if (Math.abs(diffDia) > 0.0001) {
+            const classeDia = diffDia > 0 ? 'preco-maior' : 'preco-menor';
+            const setaDia = diffDia > 0 ? '↑' : '↓';
+            htmlVarDia = `<span class="${classeDia}">${setaDia} ${formatarPercentual(Math.abs(diffDia))}</span>`;
+        } else if (item.precoAtual > 0 && item.precoMedio > 0) { // Se tem preço mas variação é zero
+            htmlVarDia = `<span style="color: #999;">0,00%</span>`;
+        }
+
+        // 2. Coluna Preço + Rentabilidade
+        const diffTotal = item.variacaoTotalPercentual;
+        let htmlRentabilidadeTotal = '';
+        let corPrecoPrincipal = '#333'; // Padrão se não houver variação relevante
+
+        if (item.precoMedio > 0 && item.precoAtual > 0) {
+            const corTotal = diffTotal >= 0 ? 'blue' : 'red';
+            const sinalTotal = diffTotal > 0 ? '+' : '';
+            corPrecoPrincipal = corTotal; // O valor principal assume a cor da variação
+            htmlRentabilidadeTotal = `<span class="alocacao-valor-real" style="color: ${corTotal};">${sinalTotal}${formatarPercentual(diffTotal)}</span>`;
+        }
+
+        // 3. Coluna PM (Visual Solicitado)
+        // Linha 1: Moeda (R$ 10,00) em Preto Negrito
+        // Linha 2: Decimal (10,005432) em Cinza Menor
+        const htmlPM = `
+            <strong>${formatarMoeda(item.precoMedio)}</strong>
+            <span class="alocacao-valor-real">${formatarDecimal(item.precoMedio, 6)}</span>
+        `;
 
         let additionalCells = '';
         if (tipoAtivo === 'Ação') {
@@ -2634,31 +1629,53 @@ function gerarHtmlTabelaAtivos(tipoAtivo, posicoesDetalhadas, filtroCorretora, v
             additionalCells = `<td class="percentual">${formatarPercentual(item.yoc)}</td><td class="percentual">${formatarPercentual(item.dy)}</td><td class="numero">${item.pvp > 0 ? formatarDecimal(item.pvp) : 'N/A'}</td>`;
         }
         
+        const diferencaValor = item.valorDeMercado - item.custoTotal;
+        const corDiferenca = diferencaValor >= 0 ? 'blue' : 'red';
+        const sinalDiferenca = diferencaValor > 0 ? '+' : '';
+        const htmlDiferenca = `<span class="alocacao-valor-real" style="color: ${corDiferenca};">${sinalDiferenca}${formatarMoeda(diferencaValor)}</span>`;
+
         const progressoPercentual = item.progressoBreakEven * 100;
         const corProgresso = '#d4edda';
         const estiloFundo = `background: linear-gradient(to right, ${corProgresso} ${progressoPercentual}%, transparent ${progressoPercentual}%);`;
-        
         const isPlannedAsset = item.quantidade < 0.000001;
-        // Tradução tooltip de exclusão do ativo planejado
-        const deleteIcon = isPlannedAsset ? `<i class="fas fa-times-circle acao-btn delete excluir-ativo-planejado" data-ticker="${item.ticker}" title="Remove from planned allocation"></i>` : '';
+        const deleteIcon = isPlannedAsset ? `<i class="fas fa-times-circle acao-btn delete excluir-ativo-planejado" data-ticker="${item.ticker}" title="Remover da alocação planejada"></i>` : '';
 
-        corpoTabela += `<tr class="ativo-row" data-ticker="${item.ticker}" style="${estiloFundo}" title="Progress to Break-Even: ${progressoPercentual.toFixed(1)}%">
-            <td class="ativo-row-clickable" title="${item.nome}">${item.ticker} - ${nomeAbreviado} ${deleteIcon}</td>
-            <td class="numero">${Math.round(item.quantidade)}</td><td class="numero">${formatarPrecoMedio(item.precoMedio)}</td>
-            <td class="numero ${classePreco}">${formatarMoeda(item.precoAtual)}</td><td class="percentual col-variacao">${desempenhoHtml}</td>
-            <td class="numero">${formatarMoeda(item.custoTotal)}</td><td class="numero ${item.valorDeMercado >= item.custoTotal ? 'valor-positivo' : 'valor-negativo'}">${formatarMoeda(item.valorDeMercado)}</td>
+        corpoTabela += `<tr class="ativo-row" data-ticker="${item.ticker}" style="${estiloFundo}" title="Break-Even: ${progressoPercentual.toFixed(1)}%">
+            <td class="ativo-row-clickable" title="${item.nome}"><strong>${item.ticker}</strong> ${deleteIcon}</td>
+            <td class="numero">${Math.round(item.quantidade)}</td>
+            
+            <td class="numero">${htmlPM}</td>
+            
+            <td class="numero">
+                <strong style="color: ${corPrecoPrincipal};">${formatarMoeda(item.precoAtual)}</strong>
+                ${htmlRentabilidadeTotal}
+            </td>
+            
+            <td class="percentual col-variacao">${htmlVarDia}</td>
+            
+            <td class="numero">${formatarMoeda(item.custoTotal)}</td>
+            <td class="numero ${item.valorDeMercado >= item.custoTotal ? 'valor-positivo' : 'valor-negativo'}">
+                <strong>${formatarMoeda(item.valorDeMercado)}</strong>
+                ${htmlDiferenca}
+            </td>
+            
             ${additionalCells}
             <td class="percentual coluna-alocacao"><input type="text" class="alocacao-ativo-input" data-ativo-ticker="${item.ticker}" value="${formatarDecimal(item.alocacaoIdeal * 100)}"><span class="alocacao-valor-real">${formatarMoeda(valorAlocacaoIdeal)}</span></td>
             <td class="percentual coluna-alocacao">${formatarPercentual(item.alocacaoAtual)}<span class="alocacao-valor-real">${formatarMoeda(item.valorDeMercado)}</span></td>
         </tr>`;
     });
     
+    // --- RODAPÉ ---
+    const diferencaTotalCategoria = valorMercadoCategoria - custoTotalCategoria;
+    const corTotalDiff = diferencaTotalCategoria >= 0 ? 'blue' : 'red';
+    const sinalTotalDiff = diferencaTotalCategoria > 0 ? '+' : '';
+    const htmlTotalDiff = `<span class="alocacao-valor-real" style="color: ${corTotalDiff};">${sinalTotalDiff}${formatarMoeda(diferencaTotalCategoria)}</span>`;
+
     let peTabelaHtml = '';
     let rodape = '<tr>';
-    // Tradução Total
-    rodape += '<td colspan="5" style="text-align: right;"><strong>TOTALS:</strong></td>';
+    rodape += '<td colspan="5" style="text-align: right; text-transform: uppercase;"><strong>Totais:</strong></td>';
     rodape += `<td class="numero"><strong>${formatarMoeda(custoTotalCategoria)}</strong></td>`;
-    rodape += `<td class="numero"><strong>${formatarMoeda(valorMercadoCategoria)}</strong></td>`;
+    rodape += `<td class="numero"><strong>${formatarMoeda(valorMercadoCategoria)}</strong>${htmlTotalDiff}</td>`;
 
     if (tipoAtivo === 'Ação' || tipoAtivo === 'FII') {
         rodape += '<td></td><td></td><td></td>';
@@ -2672,43 +1689,68 @@ function gerarHtmlTabelaAtivos(tipoAtivo, posicoesDetalhadas, filtroCorretora, v
     peTabelaHtml = `<tfoot>${rodape}</tfoot>`;
 
     const classeTabela = filtroCorretora !== 'consolidado' ? 'filtro-corretora-ativo' : '';
-    // --- INÍCIO DA ALTERAÇÃO TAREFA 2 ---
-    // Adiciona a classe CSS e o data-attribute ao título <h2>
-    // Tradução dos Tipos
-    const tituloSecao = tipoAtivo === 'FII' ? 'Real Estate Investment Trusts' : (tipoAtivo === 'Ação' ? 'Shares' : tipoAtivo + 's');
-    const tituloHtml = `<h2 class="titulo-clicavel-grafico" data-tipo-ativo="${tipoAtivo}" title="Click to view the ${tituloSecao} price chart">${tituloSecao}</h2>`;
-    // --- FIM DA ALTERAÇÃO TAREFA 2 ---
+    const tituloSecao = tipoAtivo === 'FII' ? 'Fundos Imobiliários' : (tipoAtivo === 'Ação' ? 'Ações' : tipoAtivo + 's');
+    const classeHeader = tipoAtivo === 'Ação' ? 'head-rv-acao' : (tipoAtivo === 'FII' ? 'head-rv-fii' : 'head-rv-etf');
+    const iconeHeader = tipoAtivo === 'Ação' ? 'fa-chart-line' : (tipoAtivo === 'FII' ? 'fa-building' : 'fa-globe');
 
-    const tabelaCompletaHtml = `<table class="${classeTabela}" data-tipo-ativo="${tipoAtivo}">
-        <thead><tr>${headers}</tr></thead>
-        <tbody>${corpoTabela}</tbody>
-        ${peTabelaHtml}
-    </table>`;
-    
-    // --- ALTERAÇÃO TAREFA 2: Retorna o título junto com o HTML da tabela ---
-    return { html: tituloHtml + tabelaCompletaHtml, custoTotal: custoTotalCategoria, valorMercado: valorMercadoCategoria };
+    const htmlFinal = `
+        <div class="dash-card">
+            <div class="dash-header ${classeHeader}">
+                <h3 class="titulo-clicavel-grafico" data-tipo-ativo="${tipoAtivo}" title="Clique para ver o gráfico de cotações" style="cursor: pointer;">
+                    <i class="fas ${iconeHeader}"></i> ${tituloSecao}
+                </h3>
+            </div>
+            <div class="dash-body" style="padding: 0;">
+                <table class="${classeTabela} dashboard-table" data-tipo-ativo="${tipoAtivo}" style="border: none; margin: 0;">
+                    <thead><tr>${headers}</tr></thead>
+                    <tbody>${corpoTabela}</tbody>
+                    ${peTabelaHtml}
+                </table>
+            </div>
+        </div>
+    `;
+
+    return { html: htmlFinal, custoTotal: custoTotalCategoria, valorMercado: valorMercadoCategoria };
 }
 function abrirModalCalendariosUnificados(vistaInicial = 'fiis') {
     const container = document.getElementById('calendario-container');
     const titulo = document.getElementById('modal-calendario-titulo');
     
-    // Tradução: Rendimentos/Dividendos
+    // ATUALIZAÇÃO: Títulos alterados e nova aba 'Simulador' adicionada
     container.innerHTML = `
         <div class="page-subheader" id="seletor-vista-calendario-unificado">
-            <h2 class="subtitulo-calendario" data-vista="fiis">Yields (REITs)</h2>
-            <h2 class="subtitulo-calendario" data-vista="acoes">Dividends (Shares/ETFs)</h2>
+            <h2 class="subtitulo-calendario" data-vista="fiis">Calendário FIIs</h2>
+            <h2 class="subtitulo-calendario" data-vista="acoes">Calendário Ações/ETFs</h2>
+            <h2 class="subtitulo-calendario" data-vista="simulador"><i class="fas fa-calculator"></i> Simulador de Meta</h2>
         </div>
         <div id="conteudo-calendario-unificado"></div>
     `;
 
     const renderizarVista = (vista) => {
         const conteudoContainer = document.getElementById('conteudo-calendario-unificado');
-        document.querySelector('[data-vista="fiis"]').classList.toggle('ativo', vista === 'fiis');
-        document.querySelector('[data-vista="acoes"]').classList.toggle('ativo', vista === 'acoes');
         
-        conteudoContainer.innerHTML = (vista === 'fiis') ? gerarHtmlCalendarioFIIs() : gerarHtmlCalendarioAcoes();
+        // Gerencia classes ativas
+        document.querySelectorAll('.subtitulo-calendario').forEach(el => el.classList.remove('ativo'));
+        const abaAtiva = document.querySelector(`[data-vista="${vista}"]`);
+        if(abaAtiva) abaAtiva.classList.add('ativo');
+        
+        // Renderiza o conteúdo baseado na escolha
+        if (vista === 'fiis') {
+            conteudoContainer.innerHTML = gerarHtmlCalendarioFIIs();
+            conectarEventosCalendario(conteudoContainer);
+        } else if (vista === 'acoes') {
+            conteudoContainer.innerHTML = gerarHtmlCalendarioAcoes();
+            conectarEventosCalendario(conteudoContainer);
+        } else if (vista === 'simulador') {
+            // Nova lógica do Simulador
+            conteudoContainer.innerHTML = gerarHtmlSimuladorRenda();
+            ativarCalculadoraSimulacao();
+        }
+    };
 
-        conteudoContainer.querySelectorAll('.provento-item-container').forEach(item => {
+    // Helper para reconectar os eventos de clique nos itens do calendário (para não repetir código)
+    const conectarEventosCalendario = (container) => {
+        container.querySelectorAll('.provento-item-container').forEach(item => {
             item.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const target = e.target;
@@ -2738,27 +1780,104 @@ function abrirModalCalendariosUnificados(vistaInicial = 'fiis') {
 
     document.getElementById('seletor-vista-calendario-unificado').addEventListener('click', (e) => {
         const target = e.target.closest('.subtitulo-calendario');
-        if (target && !target.classList.contains('ativo')) {
+        if (target) {
             renderizarVista(target.dataset.vista);
         }
     });
 
-    // Tradução: Título
-    titulo.textContent = 'Income Calendars';
+    // ATUALIZAÇÃO: Título principal alterado para 'Proventos'
+    titulo.textContent = 'Proventos';
     renderizarVista(vistaInicial); 
     abrirModal('modal-proventos-calendario');
 }
+function gerarHtmlSimuladorRenda() {
+    const thStyle = 'cursor: pointer; user-select: none;';
+    
+    return `
+        <div style="padding: 20px;">
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef; margin-bottom: 20px;">
+                
+                <div style="display: flex; justify-content: center; margin-bottom: 15px;">
+                    <div class="btn-group btn-group-toggle" data-toggle="buttons" style="border: 1px solid #ddd; border-radius: 5px; overflow: hidden;">
+                        
+                        <label class="btn btn-white active" id="lbl-modo-renda" style="border-right: 1px solid #ddd; padding: 8px 20px; cursor: pointer; color: #2c3e50;">
+                            <input type="radio" name="modo-simulador" value="renda" checked autocomplete="off"> 
+                            <i class="fas fa-dollar-sign text-success"></i> Meta de Renda Mensal (R$)
+                        </label>
+                        
+                        <label class="btn btn-white" id="lbl-modo-qtd" style="padding: 8px 20px; cursor: pointer; color: #2c3e50;">
+                            <input type="radio" name="modo-simulador" value="qtd" autocomplete="off"> 
+                            <i class="fas fa-sync-alt text-primary"></i> Meta Bola de Neve (Qtd.)
+                        </label>
+                    </div>
+                </div>
 
+                <div style="text-align: center;">
+                    <label id="label-simulador-instrucao" style="display: block; font-size: 1.05em; color: #555; margin-bottom: 10px;">
+                        Quanto você quer receber <strong>por mês</strong>?
+                    </label>
+                    
+                    <div style="display: flex; justify-content: center; align-items: center; gap: 10px;">
+                        <span id="simulador-prefixo" style="font-size: 1.5em; color: #2c3e50; font-weight: bold;">R$</span>
+                        <input type="number" id="input-meta-simulador" step="10" placeholder="0,00" 
+                            style="font-size: 1.5em; width: 160px; padding: 5px 10px; border: 2px solid #3498db; border-radius: 6px; text-align: center; color: #2c3e50; font-weight: bold;">
+                        <span id="simulador-sufixo" style="font-size: 1.2em; color: #7f8c8d; font-weight: 600; display: none;">cotas/mês</span>
+                    </div>
+
+                    <p id="simulador-legenda" style="font-size: 0.85em; color: #888; margin-top: 10px;">
+                        * Calcula quantas cotas são necessárias para gerar esse valor mensalmente.
+                    </p>
+                </div>
+            </div>
+
+            <div class="dash-card">
+                <div class="dash-body table-responsive p-0" style="max-height: 400px; overflow-y: auto;">
+                    <table class="dashboard-table" id="tabela-simulador-resultados">
+                        <thead>
+                            <tr>
+                                <th class="sortable-sim" data-key="ticker" style="text-align: left; ${thStyle}">Ativo <i class="fas fa-sort text-muted small"></i></th>
+                                <th class="sortable-sim numero" data-key="precoAtual" style="text-align: right; ${thStyle}">Preço Atual <i class="fas fa-sort text-muted small"></i></th>
+                                <th class="sortable-sim numero" data-key="mediaMensalUnit" style="text-align: right; ${thStyle}" title="Baseado no histórico recente">Yield Unit. (Mês) <i class="fas fa-sort text-muted small"></i></th>
+                                <th class="sortable-sim numero" data-key="qtdAtual" style="text-align: right; ${thStyle}">Qtd. Atual <i class="fas fa-sort text-muted small"></i></th>
+                                
+                                <th class="sortable-sim numero" data-key="rendaAtual" style="text-align: right; ${thStyle}">Renda Atual <i class="fas fa-sort text-muted small"></i></th>
+                                
+                                <th class="sortable-sim numero" data-key="qtdNecessaria" style="background: #f0f8ff; text-align: right; ${thStyle}">Qtd. Meta <i class="fas fa-sort text-muted small"></i></th>
+                                <th class="sortable-sim numero" data-key="rendaMeta" style="background: #f0f8ff; text-align: right; ${thStyle}">Renda Meta <i class="fas fa-sort text-muted small"></i></th>
+                                
+                                <th class="sortable-sim numero" data-key="faltaComprar" style="text-align: right; ${thStyle}">Falta Comprar <i class="fas fa-sort text-muted small"></i></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="8" style="text-align: center; padding: 20px; color: #999;">Digite um valor acima para simular.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+}
 function abrirModalDetalhesAtivo(ticker) {
     const ativo = todosOsAtivos.find(a => a.ticker === ticker);
     const posicao = gerarPosicaoDetalhada()[ticker];
     const dadosMercado = dadosDeMercado.cotacoes[ticker] || {};
     
+    // Leitura das Configurações Globais
+    const pesosAcoes = configuracoesFiscais.pesosScore?.acoes || { dy: 45, bazin: 35, payout: 5, datacom: 15 };
+    const pesosFiis = configuracoesFiscais.pesosScore?.fiis || { dy: 60, pvp: 40 };
+    const TOLERANCIA_CONFIG = configuracoesFiscais.toleranciaRebalanceamento || 0.30;
+    
+    // Configurações de Venda
+    const respeitarRegrasAlocacao = configuracoesFiscais.considerarRegrasVenda !== undefined 
+        ? configuracoesFiscais.considerarRegrasVenda 
+        : true;
+    const margemAlvo = configuracoesFiscais.margemLucroVenda || 0;
+
     if (!ativo) return;
 
-    // 1. Busca dados de balanceamento
+    // 1. Busca dados de balanceamento para o contexto
     const dadosBalanceamento = gerarDadosBalanceamento('todos');
-    const tipoCategoria = ativo.tipo === 'Ação' ? 'Ações' : ativo.tipo === 'FII' ? 'FIIs' : 'ETF';
+    const tipoCategoria = ativo.tipo === 'Ação' ? 'Ações' : ativo.tipo === 'FII' ? 'FIIs' : ativo.tipo; // Normaliza
     const dadosDoAtivoNoBalanceamento = dadosBalanceamento.categorias[tipoCategoria]?.ativos.find(a => a.ticker === ticker);
     
     const dadosBal = dadosDoAtivoNoBalanceamento || { 
@@ -2767,7 +1886,7 @@ function abrirModalDetalhesAtivo(ticker) {
         ajuste: { valor: 0, percentual: 0 }
     };
 
-    // 2. Determina o contexto
+    // 2. Determina o contexto (Compra ou Venda)
     const isCompra = dadosBal.ajuste.valor > 0;
     const isVenda = dadosBal.ajuste.valor < 0;
     
@@ -2775,187 +1894,190 @@ function abrirModalDetalhesAtivo(ticker) {
     const modalConteudo = document.getElementById('modal-ativo-detalhes-conteudo');
     const modalFooter = document.querySelector('#modal-ativo-detalhes .form-actions'); 
 
-    // Tradução dos Títulos de Análise de Rebalanceamento
-    let tituloAcao = isCompra ? 'Opportunity (Buy)' : (isVenda ? 'Rebalancing (Sell)' : 'In Equilibrium');
-    modalTitulo.textContent = `${tituloAcao} Analysis - ${ativo.ticker}`;
+    let tituloAcao = isCompra ? 'Oportunidade (Compra)' : (isVenda ? 'Rebalanceamento (Venda)' : 'Em Equilíbrio');
+    if (modalTitulo) modalTitulo.textContent = `Análise de ${tituloAcao} - ${ativo.ticker}`;
     
-    // --- CONSTRUÇÃO DO CONTEÚDO ---
     let conteudoHtml = '';
+    const formatarExpl = (texto) => `<div style="margin-top: 5px; font-size: 0.85em; color: #666; line-height: 1.3; font-weight: normal; text-align: left;">${texto}</div>`;
 
-    // SEÇÃO 1: DIAGNÓSTICO DE ALOCAÇÃO
+    // --- SEÇÃO 1: DIAGNÓSTICO DE ALOCAÇÃO (Comum a todos) ---
     const percIdeal = dadosBal.ideal.percentualGlobal;
     const percAtual = dadosBal.atual.percentualGlobal;
     const desvio = dadosBal.ajuste.percentual; 
     const classeDesvio = desvio > 0 ? 'valor-positivo' : 'valor-negativo';
     
-    const tolerancia = 0.02; 
-    const modoAtual = dadosAlocacao.modoRebalanceamento || 'categoria';
-    // Tradução: Modos de Alocação
-    const textoModo = modoAtual === 'ativo' ? 'By Asset (Individual)' : 'By Category (Hierarchical)';
+    // Texto do modo de operação
+    const textoModo = dadosAlocacao.modoRebalanceamento === 'ativo' ? 'Por Ativo (Individual)' : 'Por Categoria (Hierárquico)';
 
     conteudoHtml += `
-        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
-            <h4 style="margin-top: 0; color: #495057;">Allocation Diagnostics (${textoModo})</h4>
+        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #e9ecef;">
+            <h4 style="margin-top: 0; color: #495057; font-size: 1rem; border-bottom: 1px solid #ddd; padding-bottom: 8px; margin-bottom: 10px;">
+                Diagnóstico de Alocação <small style="font-weight: normal; color: #777;">(${textoModo})</small>
+            </h4>
             <div class="form-grid" style="grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center;">
-                <div><label style="display:block; font-size:0.8em; color:#666;">Target Allocation</label><strong>${formatarPercentual(percIdeal)}</strong></div>
-                <div><label style="display:block; font-size:0.8em; color:#666;">Current Allocation</label><strong>${formatarPercentual(percAtual)}</strong></div>
-                <div><label style="display:block; font-size:0.8em; color:#666;">Deviation</label><strong class="${classeDesvio}">${formatarPercentual(Math.abs(desvio))} ${desvio > 0 ? '(Below)' : '(Above)'}</strong></div>
+                <div><label style="display:block; font-size:0.8em; color:#666;">Alocação Ideal</label><strong>${formatarPercentual(percIdeal)}</strong></div>
+                <div><label style="display:block; font-size:0.8em; color:#666;">Alocação Atual</label><strong>${formatarPercentual(percAtual)}</strong></div>
+                <div><label style="display:block; font-size:0.8em; color:#666;">Desvio Real</label><strong class="${classeDesvio}">${formatarPercentual(Math.abs(desvio))} ${desvio > 0 ? '(Abaixo)' : '(Acima)'}</strong></div>
             </div>
-            <p style="margin-top: 10px; font-size: 0.9em; text-align: center;">
-                ${isCompra ? `Capital Required: <strong>${formatarMoeda(dadosBal.ajuste.valor)}</strong>` : `Excess Capital: <strong>${formatarMoeda(Math.abs(dadosBal.ajuste.valor))}</strong>`}
+            <p style="margin-top: 15px; font-size: 0.9em; text-align: center; background: #fff; padding: 8px; border-radius: 4px; border: 1px dashed #ccc;">
+                ${isCompra ? `Sugestão Financeira: Aportar <strong>${formatarMoeda(dadosBal.ajuste.valor)}</strong>` : `Excesso Matemático: <strong>${formatarMoeda(Math.abs(dadosBal.ajuste.valor))}</strong>`}
             </p>
         </div>
     `;
 
-    // SEÇÃO 2: LÓGICA ESPECÍFICA
+    // --- SEÇÃO 2: LÓGICA ESPECÍFICA (COMPRA OU VENDA) ---
+    
     if (isCompra || (!isCompra && !isVenda)) {
-        // --- LÓGICA DE COMPRA ---
+        // ====================================================================
+        // AUDITORIA DE COMPRA (SCORE)
+        // ====================================================================
         const scores = calcularScoreDeQualidade(ativo, dadosMercado);
-        
         conteudoHtml += `
-            <h4 style="color: var(--success-color); border-bottom: 2px solid var(--success-color); padding-bottom: 5px;">Prioritization Rationale (Score: ${scores.final.toFixed(0)}/100)</h4>
-            <p style="font-size: 0.9em; color: #555; margin-bottom: 15px;">Criteria defining the priority of this asset in the buy queue.</p>
-            <table class="dashboard-table">
-                <thead><tr><th>Criterion</th><th class="numero">Current Data</th><th class="numero">Score</th></tr></thead>
-                <tbody>
-        `;
+            <h4 style="color: var(--success-color); border-bottom: 2px solid var(--success-color); padding-bottom: 5px;">
+                <i class="fas fa-check-circle"></i> Racional de Priorização (Score: ${scores.final.toFixed(0)})
+            </h4>
+            <p style="font-size: 0.9em; color: #555; margin-bottom: 15px;">A nota final define quem deve ser comprado primeiro entre os ativos que precisam de aporte.</p>
+            <table class="dashboard-table" style="table-layout: fixed;">
+                <colgroup><col style="width: 35%;"><col style="width: 45%;"><col style="width: 20%;"></colgroup>
+                <thead><tr><th>Critério (Peso)</th><th>Análise</th><th class="numero">Nota</th></tr></thead>
+                <tbody>`;
 
         if (ativo.tipo === 'Ação') {
             const projecaoAnual = calcularProjecaoAnualUnitaria(ticker, { limiteAnos: 5 });
             const yieldProj = (dadosMercado.valor > 0) ? projecaoAnual / dadosMercado.valor : 0;
-            const tetoBazin = calcularPrecoTetoBazin(projecaoAnual, ativo.metaYieldBazin || 0.06);
+            const yieldTarget = ativo.metaYieldBazin || 0.06;
+            const tetoBazin = calcularPrecoTetoBazin(projecaoAnual, yieldTarget);
             const payout = (dadosMercado.lpa_acao > 0) ? projecaoAnual / dadosMercado.lpa_acao : 0;
             
-            const tipYield = `Projected Yield (${formatarPercentual(yieldProj)}):\nThis value represents the expected return in dividends. Values above 6% earn more points.`;
-            const tipBazin = `Bazin Method:\nThe calculated Ceiling Price is ${formatarMoeda(tetoBazin)}. Since the current price is ${formatarMoeda(dadosMercado.valor)}, the margin of safety defines the score.`;
-            
             conteudoHtml += `
-                <tr><td>Projected Yield <i class="fas fa-question-circle info-icon" data-tooltip="${tipYield}"></i></td><td class="numero">${formatarPercentual(yieldProj)}</td><td class="numero"><strong>${scores.yield.toFixed(0)}</strong> pts</td></tr>
-                <tr><td>Bazin Ceiling Price <i class="fas fa-question-circle info-icon" data-tooltip="${tipBazin}"></i></td><td class="numero">Ceiling: ${formatarMoeda(tetoBazin)}</td><td class="numero"><strong>${scores.bazin.toFixed(0)}</strong> pts</td></tr>
-                <tr><td>Payout (5%)</td><td class="numero">${formatarPercentual(payout)}</td><td class="numero"><strong>${scores.payout.toFixed(0)}</strong> pts</td></tr>
-                <tr><td>Next Ex-Date (15%)</td><td class="numero">${scores.dataCom > 0 ? 'Yes' : 'No'}</td><td class="numero"><strong>${scores.dataCom.toFixed(0)}</strong> pts</td></tr>
-            `;
+                <tr><td>Yield (${pesosAcoes.dy}%)</td><td>${formatarExpl(`Proj: <strong>${formatarPercentual(yieldProj)}</strong>. Meta: ${formatarPercentual(yieldTarget)}.`)}</td><td class="numero"><strong>${scores.yield.toFixed(0)}</strong></td></tr>
+                <tr><td>Desc. Bazin (${pesosAcoes.bazin}%)</td><td>${formatarExpl(`Teto: <strong>${formatarMoeda(tetoBazin)}</strong>. Atual: ${formatarMoeda(dadosMercado.valor)}`)}</td><td class="numero"><strong>${scores.bazin.toFixed(0)}</strong></td></tr>
+                <tr><td>Payout (${pesosAcoes.payout}%)</td><td>${formatarExpl(`Payout Projetado: <strong>${formatarPercentual(payout)}</strong>`)}</td><td class="numero"><strong>${scores.payout.toFixed(0)}</strong></td></tr>
+                <tr><td>Data-Com (${pesosAcoes.datacom}%)</td><td>${scores.dataCom > 0 ? 'Próxima' : 'Distante'}</td><td class="numero"><strong>${scores.dataCom.toFixed(0)}</strong></td></tr>`;
         } else if (ativo.tipo === 'FII') {
             const ultimoProv = getUltimoProvento(ticker);
             const yieldProj = (dadosMercado.valor > 0 && ultimoProv > 0) ? (ultimoProv * 12) / dadosMercado.valor : 0;
             const pvp = (dadosMercado.vpa > 0 && dadosMercado.valor > 0) ? dadosMercado.valor / dadosMercado.vpa : 0;
-            
-            const tipPVP = `P/BV (${formatarDecimal(pvp)}):\nIndicates if the fund is cheap (below 1.0) or expensive. The system prioritizes discounted funds.`;
-
             conteudoHtml += `
-                <tr><td>Dividend Yield <i class="fas fa-question-circle info-icon" data-tooltip="Annualized projected yield: ${formatarPercentual(yieldProj)}"></i></td><td class="numero">${formatarPercentual(yieldProj)}</td><td class="numero"><strong>${scores.yield.toFixed(0)}</strong> pts</td></tr>
-                <tr><td>P/BV <i class="fas fa-question-circle info-icon" data-tooltip="${tipPVP}"></i></td><td class="numero">${formatarDecimal(pvp)}</td><td class="numero"><strong>${scores.pvp.toFixed(0)}</strong> pts</td></tr>
-            `;
+                <tr><td>Yield (${pesosFiis.dy}%)</td><td>${formatarExpl(`Yield Anualizado: <strong>${formatarPercentual(yieldProj)}</strong>`)}</td><td class="numero"><strong>${scores.yield.toFixed(0)}</strong></td></tr>
+                <tr><td>P/VP (${pesosFiis.pvp}%)</td><td>${formatarExpl(`P/VP Atual: <strong>${formatarDecimal(pvp)}</strong>`)}</td><td class="numero"><strong>${scores.pvp.toFixed(0)}</strong></td></tr>`;
         }
         conteudoHtml += `</tbody></table>`;
 
     } else {
-        // --- LÓGICA DE VENDA: TOOLTIPS INTELIGENTES ---
+        // ====================================================================
+        // AUDITORIA DE VENDA (TRAVAS E REGRAS)
+        // ====================================================================
         const precoMedio = posicao ? posicao.precoMedio : 0;
         const precoAtual = dadosMercado.valor || 0;
         
-        // 1. Análise da Banda de Tolerância
-        const estourouTolerancia = Math.abs(desvio) > tolerancia;
-        let statusTolerancia = '';
-        let tipTolerancia = '';
-
-        if (modoAtual === 'categoria' && !estourouTolerancia) {
-             statusTolerancia = '<span style="color:var(--warning-color); font-weight:bold;">IGNORED (Category Rule)</span>';
-             tipTolerancia = `Suggestion Reason:\nAlthough the individual deviation (${formatarPercentual(Math.abs(desvio))}) is within the ${formatarPercentual(tolerancia)} band, this asset belongs to a Category (${tipoCategoria}) that exceeded the global target. The system suggests reducing it to rebalance the category.`;
-        } else if (estourouTolerancia) {
-             statusTolerancia = '<span style="color:var(--danger-color); font-weight:bold;">ABOVE LIMIT</span>';
-             tipTolerancia = `Excess Detected:\nThe asset exceeded the tolerance band of ${formatarPercentual(tolerancia)}. Current deviation: ${formatarPercentual(Math.abs(desvio))}. Selling is suggested for rebalancing.`;
-        } else {
-             statusTolerancia = '<span style="color:var(--success-color); font-weight:bold;">WITHIN BAND</span>';
-             tipTolerancia = `Normal Situation:\nThe deviation is within the acceptable limit of ${formatarPercentual(tolerancia)}.`;
-        }
-
-        // 2. Análise da Trava de Prejuízo
-        const isLucro = precoAtual >= precoMedio;
-        const statusLucro = isLucro 
-            ? `<span style="color:var(--success-color); font-weight:bold;">CLEARED (Profit)</span>` 
-            : `<span style="color:var(--danger-color); font-weight:bold;">BLOCKED (Loss)</span>`;
+        // --- 1. Análise da Banda de Tolerância ---
+        const toleranciaAbsolutaCarteira = percIdeal * TOLERANCIA_CONFIG; 
+        const estourouTolerancia = Math.abs(desvio) > toleranciaAbsolutaCarteira;
         
-        let tipLucro = '';
-        if (!isLucro) {
-            tipLucro = `PROTECTION LOCK:\nCurrent Price (${formatarMoeda(precoAtual)}) is LOWER than Average Price (${formatarMoeda(precoMedio)}).\nThe system blocks the sale to avoid realizing financial loss, ignoring the need for rebalancing at this time.`;
+        let statusTolerancia = '';
+        let textoTolerancia = '';
+        const desvioFmt = formatarPercentual(Math.abs(desvio));
+        const tolFmt = formatarPercentual(toleranciaAbsolutaCarteira);
+
+        if (dadosAlocacao.modoRebalanceamento === 'categoria' && !estourouTolerancia) {
+             statusTolerancia = '<span style="color:var(--warning-color); font-weight:bold;">IGNORADO</span>';
+             textoTolerancia = `O ativo desviou <strong>${desvioFmt}</strong> (dentro da tolerância de ${tolFmt}), mas a <strong>Categoria inteira excedeu a meta</strong>, forçando a venda.`;
+        } else if (estourouTolerancia) {
+             statusTolerancia = '<span style="color:var(--danger-color); font-weight:bold;">ESTOUROU</span>';
+             textoTolerancia = `O desvio de <strong>${desvioFmt}</strong> é maior que a tolerância permitida de <strong>${tolFmt}</strong>.`;
         } else {
-            tipLucro = `Sale Permitted:\nCurrent Price (${formatarMoeda(precoAtual)}) is HIGHER than Average Price (${formatarMoeda(precoMedio)}).\nThe sale will generate a taxable or exempt profit.`;
+             statusTolerancia = '<span style="color:var(--success-color); font-weight:bold;">DENTRO</span>';
+             textoTolerancia = `O desvio de <strong>${desvioFmt}</strong> está dentro da tolerância de <strong>${tolFmt}</strong>.`;
         }
 
-        // 3. Trava de Valuation (FIIs)
+        // --- 2. Análise da Trava de Lucro/Margem (NOVA LÓGICA) ---
+        const lucroPorCota = precoAtual - precoMedio;
+        const margemAtual = (precoMedio > 0) ? lucroPorCota / precoMedio : 0;
+        
+        let statusLucro = '';
+        let textoLucro = '';
+        let isLucroOk = false;
+
+        // Verifica qual regra está ativa
+        if (respeitarRegrasAlocacao) {
+            // MODO SEGURO: Apenas lucro > 0
+            isLucroOk = precoAtual > precoMedio;
+            const corStatus = isLucroOk ? 'var(--success-color)' : 'var(--danger-color)';
+            statusLucro = `<span style="color:${corStatus}; font-weight:bold;">${isLucroOk ? 'LIBERADO' : 'BLOQUEADO'}</span>`;
+            
+            if(isLucroOk) {
+                textoLucro = `Modo Seguro: Há lucro na operação (${formatarMoeda(lucroPorCota)}/cota). Venda permitida para ajuste de risco.`;
+            } else {
+                textoLucro = `Modo Seguro: Bloqueado para evitar prejuízo. PM: ${formatarMoeda(precoMedio)}.`;
+            }
+        } else {
+            // MODO OPORTUNISTA: Lucro > Margem Configurada
+            isLucroOk = margemAtual >= margemAlvo;
+            const corStatus = isLucroOk ? 'var(--success-color)' : 'var(--danger-color)';
+            statusLucro = `<span style="color:${corStatus}; font-weight:bold;">${isLucroOk ? 'ALVO ATINGIDO' : 'ABAIXO DA MARGEM'}</span>`;
+            
+            if(isLucroOk) {
+                textoLucro = `Modo Oportunista: Lucro de <strong>${formatarPercentual(margemAtual)}</strong> supera a meta configurada de <strong>${formatarPercentual(margemAlvo)}</strong>.`;
+            } else {
+                textoLucro = `Modo Oportunista: Lucro atual de <strong>${formatarPercentual(margemAtual)}</strong> é inferior à margem desejada de <strong>${formatarPercentual(margemAlvo)}</strong>.`;
+            }
+        }
+
+        // --- 3. Análise de P/VP (FIIs) ---
         let htmlPVP = '';
         if (ativo.tipo === 'FII') {
             const vpa = dadosMercado.vpa || 0;
             const pvp = (vpa > 0 && precoAtual > 0) ? precoAtual / vpa : 0;
-            const isPvpOk = pvp >= 1.0; 
+            let isPvpOk = true;
+            let textoRegraFII = '';
             
-            const statusPvp = isPvpOk 
-                ? `<span style="color:var(--success-color); font-weight:bold;">CLEARED (Premium)</span>` 
-                : `<span style="color:var(--warning-color); font-weight:bold;">WARNING (Discount)</span>`;
-            
-            let tipPVPVenda = '';
-            if (!isPvpOk) {
-                tipPVPVenda = `Valuation Warning:\nThe fund is trading below its asset value (P/BV ${formatarDecimal(pvp)}). Selling now means giving up assets at a discount.`;
-            } else {
-                tipPVPVenda = `Adequate Valuation:\nThe fund is trading at a premium (P/BV ${formatarDecimal(pvp)}). Sale cleared from a value perspective.`;
+            if (ativo.subtipoFii === 'Papel' || ativo.subtipoFii === 'Hibrido') {
+                if (pvp > 0 && pvp < 0.99) { 
+                    isPvpOk = false; 
+                    textoRegraFII = 'FII de Papel/Híbrido descontado (P/VP < 0.99). Venda Bloqueada.'; 
+                } else { 
+                    textoRegraFII = 'P/VP permite venda ou Fundo de Tijolo.'; 
+                }
+            } else { 
+                textoRegraFII = 'FII de Tijolo: Regra de P/VP é flexível.'; 
             }
             
-            htmlPVP = `<tr>
-                <td>Valuation Lock <i class="fas fa-question-circle info-icon" data-tooltip="${tipPVPVenda}"></i></td>
-                <td class="numero">P/BV: ${formatarDecimal(pvp)}</td>
-                <td class="numero">${statusPvp}</td>
-            </tr>`;
+            const statusPvp = isPvpOk ? `<span style="color:var(--success-color); font-weight:bold;">OK</span>` : `<span style="color:var(--danger-color); font-weight:bold;">BLOQUEADO</span>`;
+            
+            htmlPVP = `<tr><td>Valuation (P/VP)</td><td class="numero">${formatarDecimal(pvp)}</td><td style="text-align: left; vertical-align: top;">${statusPvp}${formatarExpl(textoRegraFII)}</td></tr>`;
         }
 
         conteudoHtml += `
-            <h4 style="color: var(--danger-color); border-bottom: 2px solid var(--danger-color); padding-bottom: 5px;">Sale Audit (Safety Locks)</h4>
-            <p style="font-size: 0.9em; color: #555; margin-bottom: 15px;">Detailed analysis of the rules that allow or block the sale.</p>
-            
+            <h4 style="color: var(--danger-color); border-bottom: 2px solid var(--danger-color); padding-bottom: 5px;">
+                <i class="fas fa-search-dollar"></i> Auditoria de Venda
+            </h4>
+            <p style="font-size: 0.9em; color: #555; margin-bottom: 15px;">Para vender, o ativo deve passar por todas as travas de segurança ativas.</p>
             <table class="dashboard-table">
-                <thead><tr><th>Criterion / Rule</th><th class="numero">Asset Data</th><th class="numero">Status</th></tr></thead>
+                <colgroup><col style="width: 25%;"><col style="width: 25%;"><col style="width: 50%;"></colgroup>
+                <thead><tr><th>Critério</th><th class="numero">Valor Ref.</th><th style="text-align: left;">Veredito</th></tr></thead>
                 <tbody>
-                    <tr>
-                        <td>Tolerance Band <i class="fas fa-question-circle info-icon" data-tooltip="${tipTolerancia}"></i></td>
-                        <td class="numero">Excess: ${formatarPercentual(Math.abs(desvio))}</td>
-                        <td class="numero">${statusTolerancia}</td>
-                    </tr>
-                    <tr>
-                        <td>Loss Lock <i class="fas fa-question-circle info-icon" data-tooltip="${tipLucro}"></i></td>
-                        <td class="numero">Avg: <strong>${formatarMoeda(precoMedio)}</strong> <br> Cur: <strong>${formatarMoeda(precoAtual)}</strong></td>
-                        <td class="numero">${statusLucro}</td>
-                    </tr>
+                    <tr><td>Tolerância</td><td class="numero">${tolFmt}</td><td style="text-align: left; vertical-align: top;">${statusTolerancia}${formatarExpl(textoTolerancia)}</td></tr>
+                    <tr><td>Lucro / Margem</td><td class="numero">${formatarMoeda(precoMedio)} (PM)</td><td style="text-align: left; vertical-align: top;">${statusLucro}${formatarExpl(textoLucro)}</td></tr>
                     ${htmlPVP}
                 </tbody>
-            </table>
-        `;
+            </table>`;
     }
 
-    modalConteudo.innerHTML = conteudoHtml;
+    if (modalConteudo) modalConteudo.innerHTML = conteudoHtml;
+    if (modalFooter) modalFooter.innerHTML = '<button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal-ativo-detalhes\').style.display=\'none\'">Fechar</button>';
     
-    if (modalFooter) {
-        modalFooter.innerHTML = '<p class="info-esc" style="margin: 0; width: 100%; text-align: center;">Click outside to close</p>';
-    }
-
-    document.getElementById('modal-ativo-detalhes').style.display = 'block';
+    const modal = document.getElementById('modal-ativo-detalhes');
+    if (modal) modal.style.display = 'block';
 }
-
-
 function abrirModalPerformance(tipoAtivo) {
     const modal = document.getElementById('modal-performance-detalhes');
     const tituloModal = modal.querySelector('h3');
     const container = modal.querySelector('div[id^="modal-"]');
     
-    // Tradução dos Títulos do Modal
-    let tituloFormatado = tipoAtivo;
-    if (tipoAtivo === 'Renda Variável') tituloFormatado = 'Variable Income';
-    if (tipoAtivo === 'Ação') tituloFormatado = 'Shares';
-    if (tipoAtivo === 'FII') tituloFormatado = 'REITs';
-    if (tipoAtivo === 'ETF') tituloFormatado = 'ETFs';
-
-    const titulo = tipoAtivo === 'Renda Variável' ? tituloFormatado : `${tituloFormatado}`;
-    tituloModal.textContent = `Performance Analysis - ${titulo}`;
-    container.innerHTML = '<h4>Calculating...</h4>';
+    const titulo = tipoAtivo === 'Renda Variável' ? tipoAtivo : `${tipoAtivo}s`;
+    tituloModal.textContent = `Análise de Performance - ${titulo}`;
+    container.innerHTML = '<h4>Calculando...</h4>';
     abrirModal('modal-performance-detalhes');
 
     const hoje = new Date().toISOString().split('T')[0];
@@ -2967,7 +2089,7 @@ function abrirModalPerformance(tipoAtivo) {
         .map(a => a.ticker);
 
     if (ativosAtuaisNaCategoria.length === 0) {
-        container.innerHTML = `<p>No positions in ${titulo} to analyze.</p>`;
+        container.innerHTML = `<p>Nenhuma posição em ${titulo} para analisar.</p>`;
         return;
     }
 
@@ -3012,37 +2134,37 @@ function abrirModalPerformance(tipoAtivo) {
     const tirAgregada = calcularTIR(fluxosAgregados, datasAgregadas);
 
     let htmlFinal = `
-        <h4>Consolidated Category Performance</h4>
+        <h4>Performance Consolidada da Categoria</h4>
         <table class="dashboard-table">
             <thead>
                 <tr>
-                    <th>Metric</th>
-                    <th class="numero">Value (R$)</th>
-                    <th class="percentual">% over Cost</th>
+                    <th>Métrica</th>
+                    <th class="numero">Valor (R$)</th>
+                    <th class="percentual">% sobre Custo</th>
                 </tr>
             </thead>
             <tbody>
-                <tr><td>Total Contribution Cost</td><td class="numero">${formatarMoeda(custoTotalCategoria)}</td><td class="percentual"></td></tr>
-                <tr><td>Capital Gain/Loss (Unrealized)</td><td class="numero ${ganhoCapitalCategoria >= 0 ? 'valor-positivo' : 'valor-negativo'}">${formatarMoeda(ganhoCapitalCategoria)}</td><td class="percentual ${ganhoCapitalCategoria >= 0 ? 'valor-positivo' : 'valor-negativo'}">${formatarPercentual(ganhoCapitalCategoria / custoTotalCategoria)}</td></tr>
-                <tr><td>Realized Results (in period)</td><td class="numero ${realizadosTotalCategoria >= 0 ? 'valor-positivo' : 'valor-negativo'}">${formatarMoeda(realizadosTotalCategoria)}</td><td class="percentual ${realizadosTotalCategoria >= 0 ? 'valor-positivo' : 'valor-negativo'}">${formatarPercentual(realizadosTotalCategoria / custoTotalCategoria)}</td></tr>
-                <tr><td>Dividends/Yields Received</td><td class="numero valor-positivo">${formatarMoeda(totalDividendosCategoria)}</td><td class="percentual valor-positivo">${formatarPercentual(totalDividendosCategoria / custoTotalCategoria)}</td></tr>
-                <tr class="total-row"><td>Total Return</td><td class="numero ${retornoTotalCategoria >= 0 ? 'valor-positivo' : 'valor-negativo'}">${formatarMoeda(retornoTotalCategoria)}</td><td class="percentual ${retornoTotalCategoria >= 0 ? 'valor-positivo' : 'valor-negativo'}">${formatarPercentual(retornoTotalCategoria / custoTotalCategoria)}</td></tr>
-                <tr><td>Annualized IRR (MWRR)</td><td colspan="2" class="percentual ${tirAgregada >= 0 ? 'valor-positivo' : 'valor-negativo'}">${!isNaN(tirAgregada) ? formatarPercentual(tirAgregada) : 'N/A'}</td></tr>
+                <tr><td>Custo Total dos Aportes</td><td class="numero">${formatarMoeda(custoTotalCategoria)}</td><td class="percentual"></td></tr>
+                <tr><td>Ganho/Perda de Capital (Não Realizado)</td><td class="numero ${ganhoCapitalCategoria >= 0 ? 'valor-positivo' : 'valor-negativo'}">${formatarMoeda(ganhoCapitalCategoria)}</td><td class="percentual ${ganhoCapitalCategoria >= 0 ? 'valor-positivo' : 'valor-negativo'}">${formatarPercentual(ganhoCapitalCategoria / custoTotalCategoria)}</td></tr>
+                <tr><td>Resultados Realizados (no período)</td><td class="numero ${realizadosTotalCategoria >= 0 ? 'valor-positivo' : 'valor-negativo'}">${formatarMoeda(realizadosTotalCategoria)}</td><td class="percentual ${realizadosTotalCategoria >= 0 ? 'valor-positivo' : 'valor-negativo'}">${formatarPercentual(realizadosTotalCategoria / custoTotalCategoria)}</td></tr>
+                <tr><td>Dividendos/Rendimentos Recebidos</td><td class="numero valor-positivo">${formatarMoeda(totalDividendosCategoria)}</td><td class="percentual valor-positivo">${formatarPercentual(totalDividendosCategoria / custoTotalCategoria)}</td></tr>
+                <tr class="total-row"><td>Retorno Total</td><td class="numero ${retornoTotalCategoria >= 0 ? 'valor-positivo' : 'valor-negativo'}">${formatarMoeda(retornoTotalCategoria)}</td><td class="percentual ${retornoTotalCategoria >= 0 ? 'valor-positivo' : 'valor-negativo'}">${formatarPercentual(retornoTotalCategoria / custoTotalCategoria)}</td></tr>
+                <tr><td>TIR Anualizada (MWRR)</td><td colspan="2" class="percentual ${tirAgregada >= 0 ? 'valor-positivo' : 'valor-negativo'}">${!isNaN(tirAgregada) ? formatarPercentual(tirAgregada) : 'N/A'}</td></tr>
             </tbody>
         </table>
         <hr style="margin: 25px 0;">
-        <h4>Individual Asset Performance</h4>
+        <h4>Performance Individual por Ativo</h4>
         <table class="dashboard-table">
             <thead>
                 <tr>
-                    <th>Asset</th>
-                    <th class="numero">Total Cost</th>
-                    <th class="numero">Market Value</th>
-                    <th class="numero">Var. (R$)</th>
-                    <th class="numero">Realized Res.</th>
-                    <th class="numero">Dividends</th>
-                    <th class="numero">Total Return</th>
-                    <th class="percentual">Ann. IRR</th>
+                    <th>Ativo</th>
+                    <th class="numero">Custo Total</th>
+                    <th class="numero">Valor Mercado</th>
+                    <th class="numero">Variação (R$)</th>
+                    <th class="numero">Result. Realizado</th>
+                    <th class="numero">Dividendos</th>
+                    <th class="numero">Retorno Total</th>
+                    <th class="percentual">TIR Anual</th>
                 </tr>
             </thead>
             <tbody>`;
@@ -3108,363 +2230,150 @@ function abrirModalPerformance(tipoAtivo) {
     htmlFinal += `</tbody></table>`;
     container.innerHTML = htmlFinal;
 }
+function renderizarCalendarioGeral() {
+    const container = document.getElementById('container-calendario-geral');
+    const selectFiltro = document.getElementById('calendario-geral-filtro-corretora');
+    
+    // --- 1. POPULAÇÃO DO FILTRO (CORRIGIDO COM SUA FUNÇÃO) ---
+    if (selectFiltro && selectFiltro.options.length === 0) {
+        // Usa a função central do sistema para garantir consistência
+        const listaCorretoras = typeof getTodasCorretoras === 'function' ? getTodasCorretoras() : [];
 
-function gerarHtmlCalendarioFIIs() {
-    const tickersFIIs = todosOsAtivos.filter(a => a.tipo === 'FII').map(a => a.ticker);
-    const proventosFIIs = todosOsProventos.filter(p => tickersFIIs.includes(p.ticker));
+        let optionsHtml = '<option value="consolidado">Consolidado (Todas)</option>';
+        listaCorretoras.forEach(c => {
+            optionsHtml += `<option value="${c}">${c}</option>`;
+        });
+        selectFiltro.innerHTML = optionsHtml;
 
-    if (proventosFIIs.length === 0) {
-        return '<p>No REIT yield records found.</p>';
+        // Adiciona evento de mudança para redesenhar a tela
+        selectFiltro.addEventListener('change', renderizarCalendarioGeral);
     }
 
-    const proventosPorAno = proventosFIIs.reduce((acc, provento) => {
-        const ano = new Date(provento.dataPagamento + 'T12:00:00').getUTCFullYear();
-        if (!acc[ano]) acc[ano] = [];
-        acc[ano].push(provento);
-        return acc;
-    }, {});
+    // Pega o valor selecionado (ou padrão)
+    const filtroCorretora = selectFiltro ? selectFiltro.value : 'consolidado';
+    
+    const calendarioData = {}; 
 
-    const anosOrdenados = Object.keys(proventosPorAno).sort((a, b) => b - a);
-    let htmlFinal = '';
-
-    anosOrdenados.forEach(ano => {
-        const proventosDoAno = proventosPorAno[ano];
-        const tickersDoAno = [...new Set(proventosDoAno.map(p => p.ticker))].sort();
-        const totaisMensais = Array(12).fill(0);
-        
-        htmlFinal += `<div class="calendario-ano"><h4>${ano}</h4><div class="tabela-projecao-wrapper"><table>`;
-        htmlFinal += `<thead><tr><th class="col-ativo">Asset</th>`;
-        const meses = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-        meses.forEach(mes => htmlFinal += `<th class="col-mes">${mes.toUpperCase()}</th>`);
-        htmlFinal += `</tr></thead><tbody>`;
-
-        tickersDoAno.forEach(ticker => {
-            const link = linksExternos.fiis ? `<a href="${linksExternos.fiis}${ticker}" target="_blank" class="ticker-link">${ticker}</a>` : ticker;
-            htmlFinal += `<tr><td class="col-ativo">
-                    ${link}
-                    <i class="fas fa-plus-circle acao-btn btn-adicionar-provento-ticker" 
-                       data-ticker="${ticker}" 
-                       title="Record income for ${ticker}"></i>
-                  </td>`;
-
-            for (let mes = 0; mes < 12; mes++) {
-                const proventosDoMes = proventosDoAno.filter(p => p.ticker === ticker && new Date(p.dataPagamento + 'T12:00:00').getUTCMonth() === mes);
-                htmlFinal += `<td>`;
-                if (proventosDoMes.length > 0) {
-                    proventosDoMes.forEach(provento => {
-                        totaisMensais[mes] += provento.valorTotalRecebido;
-                        htmlFinal += `
-                            <div class="provento-item-container" data-provento-id="${provento.id}">
-                                <div class="provento-item">
-                                    <div class="provento-valor-total">${formatarMoeda(provento.valorTotalRecebido)}</div>
-                                    <div class="provento-detalhe" title="Share quantity and yield per share">(${Math.round(provento.quantidadeNaDataCom)} x ${formatarMoeda(provento.valorIndividual)})</div>
-                                    <div class="provento-detalhe" title="Yield on Cost">YOC: ${formatarPercentual(provento.yieldOnCost)}</div>
-                                </div>
-                                <div class="provento-acoes" style="display: none;">
-                                    <i class="fas fa-edit acao-btn edit" title="Edit Income"></i>
-                                    <i class="fas fa-trash acao-btn delete" title="Delete Income"></i>
-                                </div>
-                            </div>
-                        `;
-                    });
-                }
-                htmlFinal += `</td>`;
-            }
-            htmlFinal += `</tr>`;
-        });
-        
-        htmlFinal += `<tr class="calendario-total-row"><td class="col-ativo">TOTAL</td>`;
-        for (let mes = 0; mes < 12; mes++) {
-            htmlFinal += `<td class="numero">${totaisMensais[mes] > 0 ? formatarMoeda(totaisMensais[mes]) : ''}</td>`;
+    // --- CACHE DE POSIÇÕES ---
+    const cachePosicoes = {};
+    const obterPosicaoNaData = (data) => {
+        if (!cachePosicoes[data]) {
+            cachePosicoes[data] = gerarPosicaoDetalhada(data);
         }
-        htmlFinal += `</tr></tbody></table></div></div>`;
-    });
+        return cachePosicoes[data];
+    };
 
-    return htmlFinal;
-}
-function gerarHtmlCalendarioAcoes() {
-    const tickersRelevantes = todosOsAtivos.filter(a => a.tipo === 'Ação' || a.tipo === 'ETF').map(a => a.ticker);
-    const proventosRelevantes = todosOsProventos.filter(p => tickersRelevantes.includes(p.ticker));
-
-    if (proventosRelevantes.length === 0) {
-        return '<p>No Share or ETF dividend records found for the calendar.</p>';
-    }
-
-    const proventosPorAno = proventosRelevantes.reduce((acc, provento) => {
-        const ano = new Date(provento.dataPagamento + 'T12:00:00').getUTCFullYear();
-        if (!acc[ano]) acc[ano] = [];
-        acc[ano].push(provento);
-        return acc;
-    }, {});
-
-    const anosOrdenados = Object.keys(proventosPorAno).sort((a, b) => b - a);
-    let htmlFinal = '';
-
-    anosOrdenados.forEach(ano => {
-        const proventosDoAno = proventosPorAno[ano];
-        const tickersDoAno = [...new Set(proventosDoAno.map(p => p.ticker))].sort();
-        const totaisMensais = Array(12).fill(0);
-
-        htmlFinal += `<div class="calendario-ano"><h4>${ano}</h4><div class="tabela-projecao-wrapper"><table>`;
-        htmlFinal += `<thead><tr><th class="col-ativo">Asset</th>`;
-        const meses = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-        meses.forEach(mes => htmlFinal += `<th class="col-mes">${mes.toUpperCase()}</th>`);
-        htmlFinal += `</tr></thead><tbody>`;
-
-        tickersDoAno.forEach(ticker => {
-            const link = linksExternos.acoes ? `<a href="${linksExternos.acoes}${ticker}" target="_blank" class="ticker-link">${ticker}</a>` : ticker;
-            htmlFinal += `<tr><td class="col-ativo">
-                    ${link}
-                    <i class="fas fa-plus-circle acao-btn btn-adicionar-provento-ticker" 
-                       data-ticker="${ticker}" 
-                       title="Record income for ${ticker}"></i>
-                  </td>`;
-
-            for (let mes = 0; mes < 12; mes++) {
-                const proventosDoMes = proventosDoAno.filter(p => p.ticker === ticker && new Date(p.dataPagamento + 'T12:00:00').getUTCMonth() === mes);
-                htmlFinal += `<td>`;
-                if (proventosDoMes.length > 0) {
-                    proventosDoMes.forEach(provento => {
-                        totaisMensais[mes] += provento.valorTotalRecebido;
-                        
-                        let tipoProvFmt = provento.tipo;
-                        if (provento.tipo === 'Rendimento') tipoProvFmt = 'Yield';
-                        if (provento.tipo === 'Dividendo') tipoProvFmt = 'Dividend';
-                        if (provento.tipo === 'Bonificação') tipoProvFmt = 'Bonus';
-                        if (provento.tipo === 'Outros') tipoProvFmt = 'Others';
-
-                        htmlFinal += `
-                            <div class="provento-item-container" data-provento-id="${provento.id}">
-                                <div class="provento-item">
-                                    <div class="provento-valor-total">${tipoProvFmt}: ${formatarMoeda(provento.valorTotalRecebido)}</div>
-                                    <div class="provento-detalhe" title="Share quantity and yield per share">(${Math.round(provento.quantidadeNaDataCom)} x ${formatarMoeda(provento.valorIndividual)})</div>
-                                    <div class="provento-detalhe" title="Yield on Cost">YOC: ${formatarPercentual(provento.yieldOnCost)}</div>
-                                </div>
-                                <div class="provento-acoes" style="display: none;">
-                                    <i class="fas fa-edit acao-btn edit" title="Edit Income"></i>
-                                    <i class="fas fa-trash acao-btn delete" title="Delete Income"></i>
-                                </div>
-                            </div>
-                        `;
-                    });
-                }
-                htmlFinal += `</td>`;
-            }
-            htmlFinal += `</tr>`;
-        });
-
-        htmlFinal += `<tr class="calendario-total-row"><td class="col-ativo">TOTAL</td>`;
-        for (let mes = 0; mes < 12; mes++) {
-            htmlFinal += `<td class="numero">${totaisMensais[mes] > 0 ? formatarMoeda(totaisMensais[mes]) : ''}</td>`;
-        }
-        htmlFinal += `</tr></tbody></table></div></div>`;
-    });
-    return htmlFinal;
-}
-
-function renderizarTelaRendaVariavel() {
-    mostrarTela('rendaVariavel');
-    const container = document.getElementById('posicao-rv-container');
-    const summaryContainer = document.getElementById('summary-rv');
-    
-    const filtroCorretoraSelect = document.getElementById('rv-filtro-corretora');
-    const filtroDataInput = document.getElementById('rv-filtro-data');
-
-    if (!filtroDataInput.value) {
-        filtroDataInput.value = new Date().toISOString().split('T')[0];
-    }
-    const filtroData = filtroDataInput.value;
-
-    // --- Início da Nova Lógica ---
-    const corretoraSelecionadaAnteriormente = filtroCorretoraSelect.value;
-    const corretorasDaData = getCorretorasComPosicaoNaData(filtroData);
-    
-    let optionsHtml = '<option value="consolidado">Consolidated</option>';
-    optionsHtml += corretorasDaData.map(c => `<option value="${c}">${c}</option>`).join('');
-    filtroCorretoraSelect.innerHTML = optionsHtml;
-
-    // Tenta preservar a seleção anterior
-    const novaListaDeOpcoes = Array.from(filtroCorretoraSelect.options).map(opt => opt.value);
-    if (novaListaDeOpcoes.includes(corretoraSelecionadaAnteriormente)) {
-        filtroCorretoraSelect.value = corretoraSelecionadaAnteriormente;
-    }
-    const filtroCorretora = filtroCorretoraSelect.value;
-    // --- Fim da Nova Lógica ---
-
-    const posicoesDetalhadas = gerarPosicaoDetalhada(filtroData);
-    const valorTotalCarteira = calcularValorTotalCarteira(filtroData);
-    
-    let htmlGerado = '';
-    let custoTotalRV = 0;
-    let valorMercadoRV = 0;
-
-    ['FII', 'Ação', 'ETF'].forEach(tipo => {
-        const dadosTabela = gerarHtmlTabelaAtivos(tipo, posicoesDetalhadas, filtroCorretora, valorTotalCarteira);
-        if (dadosTabela.html) {
-            htmlGerado += dadosTabela.html; // AQUI ESTÁ A CORREÇÃO
-            
-            custoTotalRV += dadosTabela.custoTotal;
-            valorMercadoRV += dadosTabela.valorMercado;
-        }
-    });
-
-    if (htmlGerado === '') {
-        container.innerHTML = '<p style="text-align: center;">No Variable Income position found for the selected filters.</p>';
-        summaryContainer.innerHTML = '';
-    } else {
-        container.innerHTML = htmlGerado;
-        const desempenhoValor = valorMercadoRV - custoTotalRV;
-        const desempenhoPercentual = custoTotalRV > 0 ? desempenhoValor / custoTotalRV : 0;
-        const classeDesempenho = desempenhoValor >= 0 ? 'valor-positivo' : 'valor-negativo';
-        const setaDesempenho = desempenhoValor >= 0 ? '↑' : '↓';
+    const initCalendarioData = (ano, mes, tipo) => {
+        if (!calendarioData[ano]) calendarioData[ano] = {};
+        if (!calendarioData[ano][mes]) calendarioData[ano][mes] = {};
         
-        const alocacaoRVPercentual = valorTotalCarteira > 0 ? valorMercadoRV / valorTotalCarteira : 0;
-
-        summaryContainer.innerHTML = `
-            <div class="summary-item">Total Cost (VI) <span>${formatarMoeda(custoTotalRV)}</span></div>
-            <div class="summary-item">Market Value (VI) <span>${formatarMoeda(valorMercadoRV)}</span></div>
-            <div class="summary-item">Portfolio Allocation <span>${formatarPercentual(alocacaoRVPercentual)}</span></div>
-            <div class="summary-item">Performance (VI) <span class="${classeDesempenho}">${formatarMoeda(desempenhoValor)} <span class="desempenho-percentual">${formatarPercentual(desempenhoPercentual)} ${setaDesempenho}</span></span></div>
-        `;
-        
-        container.querySelectorAll('th.sortable').forEach(header => {
-            const table = header.closest('table');
-            if (table) {
-                const tipoAtivo = table.dataset.tipoAtivo;
-                const sortConfig = sortConfigRendaVariavel[tipoAtivo];
-                if (sortConfig && header.dataset.key === sortConfig.key) {
-                    header.classList.add(sortConfig.direction);
-                }
-            }
-        });
-    }
-
-    renderizarFiltroAtivoInfo(filtroCorretora, 'filtro-info-rv');
-}
-
-function renderizarFiltroAtivoInfo(filtroCorretora, containerId) {
-    const container = document.getElementById(containerId);
-    container.innerHTML = ''; // Limpa o container
-
-    const textoElement = document.createElement('span');
-    textoElement.className = 'logo-texto'; // Mantemos a classe por enquanto
-
-    if (filtroCorretora === 'consolidado') {
-        textoElement.textContent = 'Consolidated';
-    } else {
-        textoElement.textContent = filtroCorretora;
-    }
-
-    container.appendChild(textoElement);
-}
-
-function abrirModalCalendarioProventos() {
-    const container = document.getElementById('calendario-container');
-    container.innerHTML = '<h4>Carregando calendário...</h4>';
-    
-    // Agora apenas chama a função auxiliar para gerar o HTML
-    const htmlFinal = gerarHtmlCalendarioFIIs();
-    container.innerHTML = htmlFinal;
-
-    container.querySelectorAll('.provento-item-container').forEach(item => {
-        item.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const target = e.target;
-            const acoesDiv = item.querySelector('.provento-acoes');
-
-            if (target.closest('.acao-btn')) {
-                const proventoId = parseFloat(item.dataset.proventoId);
-                if (target.closest('.edit')) {
-                    const provento = todosOsProventos.find(p => p.id === proventoId);
-                    if (provento) {
-                        retornoModalProvento = 'calendario-fiis';
-                        abrirModalLancamentoProvento(provento);
-                    }
-                } else if (target.closest('.delete')) {
-                    deletarProvento(proventoId);
-                }
-            } else { 
-                document.querySelectorAll('.provento-acoes').forEach(el => {
-                    if (el !== acoesDiv) el.style.display = 'none';
-                });
-                acoesDiv.style.display = acoesDiv.style.display === 'flex' ? 'none' : 'flex';
-            }
-        });
-    });
-    
-    abrirModal('modal-proventos-calendario');
-}
-function abrirModalCalendarioProventosAcoes() {
-    const container = document.getElementById('calendario-container-acoes');
-    container.innerHTML = '<h4>Carregando calendário...</h4>';
-
-    // Agora apenas chama a função auxiliar para gerar o HTML
-    const htmlFinal = gerarHtmlCalendarioAcoes();
-    container.innerHTML = htmlFinal;
-    
-    container.querySelectorAll('.provento-item-container').forEach(item => {
-        item.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const target = e.target;
-            const acoesDiv = item.querySelector('.provento-acoes');
-
-            if (target.closest('.acao-btn')) {
-                const proventoId = parseFloat(item.dataset.proventoId);
-                const provento = todosOsProventos.find(p => p.id === proventoId);
-                if (provento) {
-                    if (target.closest('.edit')) {
-                        retornoModalProvento = 'calendario-acoes';
-                        abrirModalLancamentoProvento(provento);
-                    } else if (target.closest('.delete')) {
-                        deletarProvento(provento.id);
-                    }
-                }
-            } else {
-                document.querySelectorAll('.provento-acoes').forEach(el => {
-                    if (el !== acoesDiv) el.style.display = 'none';
-                });
-                acoesDiv.style.display = acoesDiv.style.display === 'flex' ? 'none' : 'flex';
-            }
-        });
-    });
-
-    abrirModal('modal-proventos-calendario-acoes');
-}
-
-function isLeap(year) {
-    return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
-}
-
-function gerarDadosProventosAnuais() {
-    const resultados = {};
-    const anoAtual = new Date().getFullYear();
-    const hoje = new Date();
-    
-    // Helper para inicializar um ano no objeto de resultados
-    const initAno = (ano) => {
-        if (!resultados[ano]) {
-            resultados[ano] = { 'Ação': 0, 'FII': 0, 'ETF': 0, 'Renda Fixa': 0, 'Total RV': 0, 'Total Geral': 0, 'MediaDiaria': 0, 'MediaMensal': 0, isProjected: false, isFuture: false };
+        if (!calendarioData[ano][mes][tipo]) {
+            const arrayHibrido = [];
+            arrayHibrido.valorRecebido = 0;
+            arrayHibrido.custoTotalFimMes = 0;
+            calendarioData[ano][mes][tipo] = arrayHibrido;
         }
     };
 
-    // 1. Processa Renda Variável
+    // 1. PRIMEIRA PASSADA: POPULAR LISTA (MODAL) E SOMAR VALORES
     todosOsProventos.forEach(p => {
         if (!p.dataPagamento) return;
-        const ano = new Date(p.dataPagamento + 'T12:00:00').getUTCFullYear();
-        initAno(ano);
-        const ativo = todosOsAtivos.find(a => a.ticker === p.ticker);
-        if (ativo && ativo.tipo) {
-            resultados[ano][ativo.tipo] += p.valorTotalRecebido;
+        
+        // Lógica de Filtro por Corretora
+        let valorConsiderado = 0;
+        if (filtroCorretora === 'consolidado') {
+            valorConsiderado = p.valorTotalRecebido;
+        } else {
+            // Tenta pegar do detalhamento. Se não existir, é 0.
+            valorConsiderado = p.posicaoPorCorretora && p.posicaoPorCorretora[filtroCorretora] 
+                ? p.posicaoPorCorretora[filtroCorretora].valorRecebido 
+                : 0;
         }
+        
+        // Fallback de segurança (se valorTotalRecebido for undefined/null)
+        if (typeof valorConsiderado === 'undefined') {
+            // Se for consolidado, calcula o total. Se for corretora específica e não achou, mantém 0.
+            if (filtroCorretora === 'consolidado') {
+                valorConsiderado = (p.valorIndividual || 0) * (p.quantidadeNaDataCom || 0);
+            }
+        }
+
+        if (!valorConsiderado || valorConsiderado === 0) return;
+
+        const data = new Date(p.dataPagamento + 'T12:00:00');
+        const ano = data.getUTCFullYear();
+        const mes = data.getUTCMonth();
+        
+        const ativoInfo = todosOsAtivos.find(a => a.ticker === p.ticker);
+        const tipoAtivo = ativoInfo ? ativoInfo.tipo : 'Outro';
+
+        initCalendarioData(ano, mes, tipoAtivo);
+        
+        // Cálculo do Custo para YoC do evento (Modal)
+        let custoNoMomentoDataCom = 0;
+        if (p.dataCom) {
+            const posicaoHistorica = obterPosicaoNaData(p.dataCom);
+            const dadosTicker = posicaoHistorica[p.ticker];
+            
+            if (dadosTicker) {
+                if (filtroCorretora === 'consolidado') {
+                    custoNoMomentoDataCom = dadosTicker.quantidade * dadosTicker.precoMedio;
+                } else {
+                    const qtdNaCorretora = dadosTicker.porCorretora[filtroCorretora] || 0;
+                    custoNoMomentoDataCom = qtdNaCorretora * dadosTicker.precoMedio;
+                }
+            }
+        }
+
+        calendarioData[ano][mes][tipoAtivo].valorRecebido += valorConsiderado;
+        
+        calendarioData[ano][mes][tipoAtivo].push({
+            ticker: p.ticker,
+            dataCom: p.dataCom,
+            dataPagamento: p.dataPagamento,
+            valorIndividual: p.valorIndividual,
+            valor: valorConsiderado,
+            custoInvestido: custoNoMomentoDataCom
+        });
     });
 
-    // 2. Processa Renda Fixa (Incremental)
+    // 2. SEGUNDA PASSADA: CUSTO TOTAL FIM DO MÊS (DENOMINADOR TABELA)
+    Object.keys(calendarioData).forEach(anoStr => {
+        const ano = parseInt(anoStr);
+        Object.keys(calendarioData[ano]).forEach(mesStr => {
+            const mes = parseInt(mesStr);
+            const ultimoDiaDoMes = new Date(ano, mes + 1, 0).toISOString().split('T')[0];
+            const posicaoNoFimDoMes = obterPosicaoNaData(ultimoDiaDoMes);
+
+            for (const [ticker, dadosPosicao] of Object.entries(posicaoNoFimDoMes)) {
+                if (dadosPosicao.quantidade > 0) {
+                    const ativoInfo = todosOsAtivos.find(a => a.ticker === ticker);
+                    const tipo = ativoInfo ? ativoInfo.tipo : 'Outro';
+
+                    if (calendarioData[ano][mes][tipo]) {
+                        let custoAtivo = 0;
+                        if (filtroCorretora === 'consolidado') {
+                            custoAtivo = dadosPosicao.quantidade * dadosPosicao.precoMedio;
+                        } else {
+                            const qtdCorretora = dadosPosicao.porCorretora?.[filtroCorretora] || 0;
+                            custoAtivo = qtdCorretora * dadosPosicao.precoMedio;
+                        }
+                        calendarioData[ano][mes][tipo].custoTotalFimMes += custoAtivo;
+                    }
+                }
+            }
+        });
+    });
+
+    // 3. RENDA FIXA
     const rendimentosRFPorAtivo = {};
     todosOsRendimentosRFNaoRealizados.forEach(r => {
         const ativoRF = todosOsAtivosRF.find(a => a.id === r.ativoId);
-        if (!ativoRF) return;
-        if (!rendimentosRFPorAtivo[r.ativoId]) rendimentosRFPorAtivo[r.ativoId] = {};
+        // Filtra RF pela instituição se necessário
+        if (!ativoRF || (filtroCorretora !== 'consolidado' && ativoRF.instituicao !== filtroCorretora)) return;
+        
         const chaveMes = r.data.substring(0, 7);
+        if (!rendimentosRFPorAtivo[r.ativoId]) rendimentosRFPorAtivo[r.ativoId] = {};
         if (!rendimentosRFPorAtivo[r.ativoId][chaveMes]) rendimentosRFPorAtivo[r.ativoId][chaveMes] = [];
         rendimentosRFPorAtivo[r.ativoId][chaveMes].push(r.rendimento);
     });
@@ -3472,736 +2381,830 @@ function gerarDadosProventosAnuais() {
     for (const ativoId in rendimentosRFPorAtivo) {
         let ultimoRendimento = 0;
         Object.keys(rendimentosRFPorAtivo[ativoId]).sort().forEach(chaveMes => {
-            const ano = parseInt(chaveMes.substring(0, 4));
+            const [ano, mes] = chaveMes.split('-').map(Number);
             const rendimentosDoMes = rendimentosRFPorAtivo[ativoId][chaveMes];
             const rendimentoFinalMes = rendimentosDoMes[rendimentosDoMes.length - 1];
             const rendimentoIncremental = rendimentoFinalMes - ultimoRendimento;
-            initAno(ano);
-            resultados[ano]['Renda Fixa'] += rendimentoIncremental;
+            
+            if (rendimentoIncremental > 0) {
+                 initCalendarioData(ano, mes - 1, 'Renda Fixa');
+                 calendarioData[ano][mes - 1]['Renda Fixa'].valorRecebido += rendimentoIncremental;
+                 const ativoDesc = todosOsAtivosRF.find(a => String(a.id) === ativoId)?.descricao || 'Renda Fixa';
+                 calendarioData[ano][mes - 1]['Renda Fixa'].push({
+                     descricao: ativoDesc,
+                     valor: rendimentoIncremental,
+                     custoInvestido: 0 
+                 });
+            }
             ultimoRendimento = rendimentoFinalMes;
         });
     }
-
-    // 3. Consolida e calcula as médias
-    Object.keys(resultados).sort().forEach(anoStr => {
-        const ano = parseInt(anoStr);
-        const res = resultados[ano];
-        res['Total RV'] = res['Ação'] + res['FII'] + res['ETF'];
-        res['Total Geral'] = res['Total RV'] + res['Renda Fixa'];
-
-        const diasNoAno = isLeap(ano) ? 366 : 365;
-
-        if (ano < anoAtual) {
-            res['MediaMensal'] = res['Total Geral'] / 12;
-            res['MediaDiaria'] = res['Total Geral'] / diasNoAno;
-        } else if (ano === anoAtual) {
-            const inicioDoAno = new Date(ano, 0, 1);
-            const diasPercorridos = Math.ceil((hoje - inicioDoAno) / (1000 * 60 * 60 * 24));
-            const totalProjetado = (res['Total Geral'] / diasPercorridos) * diasNoAno;
-            res['MediaMensal'] = totalProjetado / 12;
-            res['MediaDiaria'] = totalProjetado / diasNoAno;
-            res.isProjected = true;
-        } else { // ano > anoAtual
-             res['MediaMensal'] = res['Total Geral'] / 12;
-             res['MediaDiaria'] = res['Total Geral'] / diasNoAno;
-             res.isFuture = true;
-        }
-    });
-
-    return resultados;
-}
-
-
-function obterProventosFiltrados() {
-    const filtroAtivo = document.getElementById('provento-filtro-ativo').value.toUpperCase();
-    const filtroTipo = document.getElementById('provento-filtro-tipo').value;
-    const filtroStatus = document.getElementById('provento-filtro-status').value;
-    const filtroDataDe = document.getElementById('provento-filtro-data-de').value;
-    let filtroDataAte = document.getElementById('provento-filtro-data-ate').value;
-    const filtroPosicao = document.getElementById('provento-filtro-posicao').value;
-
-    if (filtroDataDe && !filtroDataAte) {
-        filtroDataAte = new Date().toISOString().split('T')[0];
+    
+    // --- GERAÇÃO HTML ---
+    const anosOrdenados = Object.keys(calendarioData).sort((a, b) => b - a);
+    
+    if (anosOrdenados.length === 0) {
+        container.innerHTML = `
+            <div class="dash-card">
+                <div class="dash-body text-center p-5 text-muted">
+                    <i class="fas fa-calendar-times fa-3x mb-3" style="opacity: 0.3;"></i><br>
+                    Nenhum rendimento encontrado para o filtro selecionado.
+                </div>
+            </div>`;
+        return;
     }
+    
+    let htmlFinal = '';
+    const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    
+    anosOrdenados.forEach(ano => {
+        htmlFinal += `
+        <div class="dash-card mb-4">
+            <div class="dash-header" style="background: #f8f9fa; border-left: 5px solid #2c3e50;">
+                <h3 style="margin: 0; font-size: 1.3em; color: #2c3e50;">${ano}</h3>
+            </div>
+            <div class="dash-body table-responsive p-0">
+                <table class="table table-bordered table-hover mb-0" style="font-size: 0.85em;">
+                    <thead class="thead-light">
+                        <tr>
+                            <th style="min-width: 150px; background: #fff;">Classe</th>`;
+        meses.forEach(mes => htmlFinal += `<th class="text-center" style="min-width: 80px;">${mes}</th>`);
+        htmlFinal += `<th class="text-right" style="min-width: 100px; background: #eee;">Total Ano</th></tr></thead><tbody>`;
 
-    let posicoesAtuais;
-    if (filtroPosicao !== 'todos') {
-        posicoesAtuais = gerarPosicaoDetalhada();
-    }
+        const totaisGeraisMes = Array(12).fill(0);
+        const totalRVMesValor = Array(12).fill(0);
+        const totalRVMesCusto = Array(12).fill(0);
 
-    const proventosFiltrados = todosOsProventos.filter(p => {
-        if (filtroDataDe && p.dataCom < filtroDataDe) return false;
-        if (filtroDataAte && p.dataCom > filtroDataAte) return false;
-        if (filtroAtivo && !p.ticker.toUpperCase().includes(filtroAtivo)) return false;
-        if (filtroTipo !== 'todos') {
-            const ativo = todosOsAtivos.find(a => a.ticker === p.ticker);
-            if (!ativo || ativo.tipo !== filtroTipo) return false;
-        }
-        if (filtroStatus !== 'todos') {
-            const dataPagamento = new Date(p.dataPagamento + 'T12:00:00');
-            const hojeMeiaNoite = new Date(new Date().toISOString().split('T')[0] + 'T00:00:00');
-            if (filtroStatus === 'receber' && dataPagamento < hojeMeiaNoite) return false;
-            if (filtroStatus === 'recebido' && dataPagamento >= hojeMeiaNoite) return false;
-        }
-
-        if (filtroPosicao === 'em_carteira') {
-            if (!posicoesAtuais[p.ticker] || posicoesAtuais[p.ticker].quantidade < 0.000001) {
-                return false;
-            }
-        } else if (filtroPosicao === 'zerados') {
-            if (posicoesAtuais[p.ticker] && posicoesAtuais[p.ticker].quantidade > 0.000001) {
-                return false;
+        const tiposDeAtivoComDados = new Set();
+        for (let i = 0; i < 12; i++) {
+            if (calendarioData[ano][i]) {
+                Object.keys(calendarioData[ano][i]).forEach(tipo => tiposDeAtivoComDados.add(tipo));
             }
         }
         
-        return true;
-    });
-    return proventosFiltrados;
-}
+        const listaTiposCompleta = Array.from(tiposDeAtivoComDados).sort();
+        const tiposRV = listaTiposCompleta.filter(t => t !== 'Renda Fixa');
+        const temRendaFixa = listaTiposCompleta.includes('Renda Fixa');
 
-function getUltimoProventoHistorico(ticker, dataLimite) {
-    const proventosDoAtivo = todosOsProventos
-        .filter(p => p.ticker === ticker && p.valorIndividual > 0 && p.dataCom && p.dataCom <= dataLimite)
-        .sort((a, b) => new Date(b.dataCom) - new Date(a.dataCom));
+        // A. RENDA VARIÁVEL
+        tiposRV.forEach(tipo => {
+            htmlFinal += `<tr><td style="font-weight: 600; color: #34495e;">${tipo}</td>`;
+            let acumuladoValorAno = 0;
+            let somaYocMensal = 0; 
+            for (let i = 0; i < 12; i++) {
+                const dados = calendarioData[ano]?.[i]?.[tipo]; 
+                const valorMes = dados ? dados.valorRecebido : 0;
+                const custoMes = dados ? dados.custoTotalFimMes : 0;
+                totalRVMesValor[i] += valorMes;
+                totalRVMesCusto[i] += custoMes;
+                totaisGeraisMes[i] += valorMes;
+                acumuladoValorAno += valorMes;
 
-    return proventosDoAtivo.length > 0 ? proventosDoAtivo[0].valorIndividual : 0;
-}
+                const hasValue = valorMes !== 0;
+                const classeClicavel = hasValue ? 'valor-clicavel' : '';
+                const dataAttributes = hasValue ? `data-ano="${ano}" data-mes="${i}" data-tipo="${tipo}"` : '';
+                const bgStyle = hasValue ? 'background-color: #fcfcfc;' : '';
+                const cursorStyle = hasValue ? 'cursor: pointer;' : '';
 
-function calcularProjecaoHistoricaParaSnapshot(snapshot) {
-    if (!snapshot || !snapshot.detalhesCarteira || !snapshot.detalhesCarteira.ativos) {
-        return 0;
-    }
+                let conteudoCelular = '-';
+                if (hasValue) {
+                    conteudoCelular = `<div style="font-weight: bold; color: #2c3e50;">${formatarMoeda(valorMes)}</div>`;
+                    if (custoMes > 0) {
+                        const yoc = (valorMes / custoMes) * 100;
+                        somaYocMensal += yoc;
+                        conteudoCelular += `<div style="font-size: 0.85em; color: #7f8c8d; margin-top: 2px;">${yoc.toFixed(2)}%</div>`;
+                    }
+                }
+                htmlFinal += `<td class="text-right ${classeClicavel}" style="${bgStyle} ${cursorStyle}" ${dataAttributes}>${conteudoCelular}</td>`;
+            }
+            let conteudoTotalAno = formatarMoeda(acumuladoValorAno);
+            if (acumuladoValorAno > 0 && somaYocMensal > 0) {
+                conteudoTotalAno += `<div style="font-size: 0.85em; color: #7f8c8d;">${somaYocMensal.toFixed(2)}%</div>`;
+            }
+            htmlFinal += `<td class="text-right" style="background: #f8f9fa;"><strong>${conteudoTotalAno}</strong></td></tr>`;
+        });
 
-    let projecaoAnualTotal = 0;
-    const dataSnapshot = snapshot.data;
-
-    for (const ticker in snapshot.detalhesCarteira.ativos) {
-        const ativoSnapshot = snapshot.detalhesCarteira.ativos[ticker];
-        const ativoInfo = todosOsAtivos.find(a => a.ticker === ticker);
-
-        if (!ativoInfo || ativoSnapshot.quantidade <= 0) continue;
-
-        let projecaoUnitaria = 0;
-        if (ativoInfo.tipo === 'FII') {
-            projecaoUnitaria = getUltimoProvento(ticker, dataSnapshot) * 12;
-        } else if (ativoInfo.tipo === 'Ação') {
-            projecaoUnitaria = calcularProjecaoAnualUnitaria(ticker, { dataLimite: dataSnapshot, limiteAnos: 5 });
+        // B. SUBTOTAL RV (ALINHAMENTO ESQUERDA)
+        if (tiposRV.length > 0) {
+            htmlFinal += `<tr style="background-color: #eaf2f8; border-top: 2px solid #bdc3c7;">
+                <td style="text-align: left; padding-left: 15px; color: #2980b9; font-weight: bold;">Subtotal RV</td>`;
+            
+            let totalValorAnoRV = 0;
+            let somaYocAnoRV = 0;
+            for (let i = 0; i < 12; i++) {
+                const valorRV = totalRVMesValor[i];
+                const custoRV = totalRVMesCusto[i];
+                totalValorAnoRV += valorRV;
+                let conteudoRV = '-';
+                if (valorRV !== 0) {
+                    conteudoRV = `<div style="color: #2980b9; font-weight: bold;">${formatarMoeda(valorRV)}</div>`;
+                    if (custoRV > 0) {
+                        const yocRV = (valorRV / custoRV) * 100;
+                        somaYocAnoRV += yocRV;
+                        conteudoRV += `<div style="font-size: 0.85em; color: #5dade2;">${yocRV.toFixed(2)}%</div>`;
+                    }
+                }
+                htmlFinal += `<td class="text-right">${conteudoRV}</td>`;
+            }
+            let conteudoTotalGeralRV = formatarMoeda(totalValorAnoRV);
+            if (totalValorAnoRV > 0 && somaYocAnoRV > 0) {
+                conteudoTotalGeralRV += `<div style="font-size: 0.85em; color: #5dade2;">${somaYocAnoRV.toFixed(2)}%</div>`;
+            }
+            htmlFinal += `<td class="text-right" style="color: #2980b9;"><strong>${conteudoTotalGeralRV}</strong></td></tr>`;
         }
 
-        projecaoAnualTotal += projecaoUnitaria * ativoSnapshot.quantidade;
-    }
-
-    return projecaoAnualTotal / 12; // Retorna a projeção mensal
-}
-
-function gerarRelatorioPosicoesZeradas() {
-    const todosOsEventos = [];
-    posicaoInicial.forEach(p => todosOsEventos.push({ data: p.data, tipo: p.tipoRegistro, payload: p }));
-    todasAsNotas.forEach(n => n.operacoes.forEach(op => todosOsEventos.push({ data: n.data, tipo: 'OPERACAO_NOTA', payload: { ...op, corretora: n.corretora } })));
-    // --- INÍCIO DA CORREÇÃO ---
-    // Adiciona os ajustes (incluindo eventos de entrada/saída) à lista de eventos a serem processados.
-    todosOsAjustes.forEach(a => todosOsEventos.push({ data: a.data, tipo: a.tipoAjuste, payload: a }));
-    // --- FIM DA CORREÇÃO ---
-
-    todosOsEventos.sort((a,b) => new Date(a.data) - new Date(b.data));
-
-    const todosOsTickers = [...new Set(todosOsEventos.map(e => e.payload.ticker || e.payload.ativo))].filter(Boolean);
-    const relatorio = [];
-
-    todosOsTickers.forEach(ticker => {
-        if (!ticker) return;
-
-        const eventosDoAtivo = todosOsEventos.filter(e => (e.payload.ticker || e.payload.ativo) === ticker);
-        if (eventosDoAtivo.length === 0) return;
-
-        let quantidade = 0;
-        let dataInicioCiclo = null;
-
-        eventosDoAtivo.forEach(evento => {
-            const payload = evento.payload;
-            let qtdOperacao = 0;
-            let tipoOperacao = '';
-
-            switch(evento.tipo) {
-                case 'SUMARIO_MANUAL':
-                case 'TRANSACAO_HISTORICA':
-                    tipoOperacao = payload.transacao ? payload.transacao.toLowerCase() : 'compra';
-                    qtdOperacao = payload.quantidade;
-                    break;
-                case 'OPERACAO_NOTA':
-                    tipoOperacao = payload.tipo;
-                    qtdOperacao = payload.quantidade;
-                    break;
-                // --- INÍCIO DA CORREÇÃO ---
-                // Adiciona o caso para tratar os eventos de ativo
-                case 'evento_ativo':
-                    if (payload.tipoEvento === 'saida') {
-                        tipoOperacao = 'venda'; // Trata como uma venda para fins de contagem de quantidade
-                        qtdOperacao = payload.detalhes.reduce((acc, d) => acc + d.quantidade, 0);
-                    } else if (payload.tipoEvento === 'entrada') {
-                        tipoOperacao = 'compra';
-                        qtdOperacao = payload.detalhes.reduce((acc, d) => acc + d.quantidade, 0);
-                    }
-                    break;
-                // --- FIM DA CORREÇÃO ---
+        // C. RENDA FIXA
+        if (temRendaFixa) {
+            htmlFinal += `<tr><td style="font-weight: 600; color: #27ae60;">Renda Fixa</td>`;
+            let totalRFNoAno = 0;
+            for (let i = 0; i < 12; i++) {
+                const dados = calendarioData[ano]?.[i]?.['Renda Fixa'];
+                const valorMes = dados ? dados.valorRecebido : 0;
+                totaisGeraisMes[i] += valorMes;
+                totalRFNoAno += valorMes;
+                const classeClicavel = valorMes !== 0 ? 'valor-clicavel' : '';
+                const dataAttributes = valorMes !== 0 ? `data-ano="${ano}" data-mes="${i}" data-tipo="Renda Fixa"` : '';
+                const cursorStyle = valorMes !== 0 ? 'cursor: pointer;' : '';
+                htmlFinal += `<td class="text-right ${classeClicavel}" style="${cursorStyle} color: #27ae60;" ${dataAttributes}>
+                    ${valorMes !== 0 ? formatarMoeda(valorMes) : '-'}
+                </td>`;
             }
+            htmlFinal += `<td class="text-right" style="background: #f8f9fa; color: #27ae60;"><strong>${formatarMoeda(totalRFNoAno)}</strong></td></tr>`;
+        }
 
-            const qtdAnterior = quantidade;
-
-            if (tipoOperacao === 'compra') {
-                quantidade += qtdOperacao;
-                // Se a posição anterior era zero, um novo ciclo de investimento começou.
-                if (qtdAnterior <= 0.000001 && quantidade > 0.000001) {
-                    dataInicioCiclo = evento.data;
-                }
-            } else if (tipoOperacao === 'venda') {
-                quantidade -= qtdOperacao;
-                // Se a posição anterior era positiva e agora é zero, o ciclo de investimento encerrou.
-                if (qtdAnterior > 0.000001 && quantidade <= 0.000001) {
-                    if (dataInicioCiclo) { // Garante que temos um início para este ciclo que está terminando
-                        relatorio.push({
-                            ticker: ticker,
-                            dataInicio: dataInicioCiclo,
-                            dataEncerramento: evento.data
-                        });
-                        dataInicioCiclo = null; // Reseta para o próximo ciclo
-                    }
-                }
-            }
-        });
+        // D. TOTAL GERAL (ALINHAMENTO ESQUERDA)
+        htmlFinal += `<tr style="background-color: #2c3e50; color: white;">
+            <td style="text-align: left; padding-left: 15px;"><strong>TOTAL MENSAL</strong></td>`;
+        let totalGeralAno = 0;
+        for (let i = 0; i < 12; i++) {
+            htmlFinal += `<td class="text-right">${totaisGeraisMes[i] > 0 ? formatarMoeda(totaisGeraisMes[i]) : '-'}</td>`;
+            totalGeralAno += totaisGeraisMes[i];
+        }
+        htmlFinal += `<td class="text-right" style="background-color: #1a252f;"><strong>${formatarMoeda(totalGeralAno)}</strong></td></tr>`;
+        
+        htmlFinal += '</tbody></table></div></div>';
     });
 
-    return relatorio;
+    container.innerHTML = htmlFinal;
+
+    container.addEventListener('click', (e) => {
+        const targetCell = e.target.closest('.valor-clicavel');
+        if (targetCell) {
+            const { ano, mes, tipo } = targetCell.dataset;
+            if(typeof abrirModalDetalhesRendimentoMensal === 'function') {
+                abrirModalDetalhesRendimentoMensal(ano, mes, tipo, calendarioData);
+            }
+        }
+    });
 }
-
-
-function renderizarCalendarioAcoes() {
-    const subtituloDataCom = document.getElementById('subtitulo-datacom');
-    const subtituloDataPag = document.getElementById('subtitulo-datapagamento');
-    const container = document.getElementById('calendario-acoes-container');
+function renderizarTelaHistoricoSnapshots() {
+    const container = document.getElementById('container-historico-snapshots');
     
-    // Lógica principal: agora lê da nossa variável de estado
-    const tipoData = tipoVistaCalendarioAcoes;
-
-    // Atualiza o estilo dos títulos (esta parte da lógica se mantém)
-    if (tipoData === 'dataCom') {
-        subtituloDataCom.classList.add('ativo');
-        subtituloDataPag.classList.remove('ativo');
-    } else {
-        subtituloDataCom.classList.remove('ativo');
-        subtituloDataPag.classList.add('ativo');
-    }    
-    container.innerHTML = '<h4>Carregando calendário...</h4>';
-
-    const tickersAcoes = new Set(todosOsAtivos.filter(a => a.tipo === 'Ação').map(a => a.ticker));
-    const proventosAcoes = todosOsProventos.filter(p => tickersAcoes.has(p.ticker));
-
-    if (proventosAcoes.length === 0) {
-        container.innerHTML = '<p>Nenhum provento de Ações encontrado para gerar o calendário.</p>';
+    if (!historicoCarteira || historicoCarteira.length < 2) {
+        container.innerHTML = '<p>Nenhum snapshot salvo. Salve seu primeiro snapshot na tela do Dashboard.</p>';
         return;
     }
 
-    const proventosPorAnoMes = {};
-    proventosAcoes.forEach(provento => {
-        const dataDoEvento = provento[tipoData];
-        if (!dataDoEvento) return;
+    const moedaSelecionada = document.querySelector('input[name="snapshot-currency"]:checked')?.value || 'BRL';
+    const sufixoMoeda = moedaSelecionada === 'BRL' ? '' : ` (${moedaSelecionada})`;
 
-        const data = new Date(dataDoEvento + 'T12:00:00');
-        const ano = data.getUTCFullYear();
-        const mes = data.getUTCMonth();
+    const cotacoes = historicoCarteira.length > 0 ? historicoCarteira[historicoCarteira.length - 1].cotacoesMoedas : dadosMoedas.cotacoes;
+    const taxaCambio = moedaSelecionada === 'BRL' ? 1 : (cotacoes[moedaSelecionada] || 0);
 
-        if (!proventosPorAnoMes[ano]) proventosPorAnoMes[ano] = Array.from({ length: 12 }, () => ({}));
-        
-        if (!proventosPorAnoMes[ano][mes][provento.ticker]) {
-            proventosPorAnoMes[ano][mes][provento.ticker] = [];
-        }
-        proventosPorAnoMes[ano][mes][provento.ticker].push(provento);
-    });
+    const formatFunction = moedaSelecionada === 'BRL' ? formatarMoeda : (valor) => formatarMoedaEstrangeira(valor, moedaSelecionada);
+    const formatDecimalFunction = moedaSelecionada === 'BRL' ? (valor) => formatarDecimal(valor, 2) : (valor) => formatarDecimal(valor, 4);
+    const converterValor = (valor) => (taxaCambio > 0 ? (valor || 0) / taxaCambio : 0);
 
-    const anosOrdenados = Object.keys(proventosPorAnoMes).sort((a, b) => b - a);
-    let htmlFinal = '';
-    const mesesCabecalho = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    // =================================================================================
+    // ETAPA 1: PROCESSAMENTO DE TODOS OS DADOS (Conversão e Projeções)
+    // =================================================================================
+    
+    // Filtra snapshots válidos e ordena (Antigo -> Recente) para calcular variações
+    const snapshotsValidos = historicoCarteira.filter(s => 
+        (s.patrimonioTotal && s.patrimonioTotal > 0) || (s.valorTotalInvestimentos && s.valorTotalInvestimentos > 0)
+    ).sort((a, b) => new Date(a.data) - new Date(b.data)); 
 
-    anosOrdenados.forEach(ano => {
-        const dadosAno = proventosPorAnoMes[ano];
-        const maxEventosPorMes = Math.max(...dadosAno.map(mesObj => Object.keys(mesObj).length));
+    const dadosProcessados = [];
+    let anterior = null;
+    
+    snapshotsValidos.forEach((snapshot) => {
+        const proventosProjetadosMensalBRL = calcularProjecaoHistoricaParaSnapshot(snapshot);
+        const valorFiisBRL = snapshot.detalhesCarteira?.valorPorClasse?.['FIIs'] || 0;
+        const valorAcoesOutrosBRL = (snapshot.detalhesCarteira?.valorPorClasse?.['Ações'] || 0) + (snapshot.detalhesCarteira?.valorPorClasse?.['ETF'] || 0);
+        const valorTotalRVBRL = valorFiisBRL + valorAcoesOutrosBRL;
+        const yieldProjetado = (valorTotalRVBRL > 0) ? (proventosProjetadosMensalBRL * 12) / valorTotalRVBRL : 0;
 
-        htmlFinal += `<div class="calendario-ano-container"><h3>${ano}</h3>`;
-        htmlFinal += `<table class="calendario-datacom-table"><thead><tr>`;
-        mesesCabecalho.forEach(mes => htmlFinal += `<th>${mes}</th>`);
-        htmlFinal += `</tr></thead><tbody>`;
-
-        if (maxEventosPorMes === 0) {
-            htmlFinal += '<tr><td colspan="12" style="height: 40px; text-align: center; font-style: italic; color: #888;">Nenhum evento neste ano.</td></tr>';
-        } else {
-            for (let i = 0; i < maxEventosPorMes; i++) {
-                htmlFinal += '<tr>';
-                for (let j = 0; j < 12; j++) {
-                    const proventosDoMesPorTicker = dadosAno[j] || {};
-                    const tickersDoMes = Object.keys(proventosDoMesPorTicker).sort();
-                    const ticker = tickersDoMes[i];
-                    
-                    if (ticker) {
-                        const proventosDoAtivoNoMes = proventosDoMesPorTicker[ticker];
-                        const totalValor = proventosDoAtivoNoMes.reduce((soma, p) => soma + p.valorTotalRecebido, 0);
-                        const totalYoc = proventosDoAtivoNoMes.reduce((soma, p) => soma + p.yieldOnCost, 0);
-
-                        htmlFinal += `<td>
-                                        <div class="provento-item-acao">
-                                            <div class="provento-ticker-calendario">${ticker}</div>
-                                            <div class="provento-detalhe-calendario" title="Valor Total Recebido no Mês">${formatarMoeda(totalValor)}</div>
-                                            <div class="provento-detalhe-calendario" title="Yield on Cost no Mês">YOC: ${formatarPercentual(totalYoc)}</div>
-                                        </div>
-                                      </td>`;
-                    } else {
-                        htmlFinal += '<td></td>';
-                    }
-                }
-                htmlFinal += '</tr>';
-            }
-        }
-        htmlFinal += '</tbody></table></div>';
-    });
-    container.innerHTML = htmlFinal;
-}
-function renderizarTelaPosicaoPorCorretora() {
-    const container = document.getElementById('container-posicao-por-corretora');
-    container.innerHTML = '<h4>Calculando posições...</h4>';
-
-    const corretoras = getTodasCorretoras();
-    const posicoesRV = gerarPosicaoDetalhada();
-    const hojeStr = new Date().toISOString().split('T')[0];
-
-    const proventosProvisionados = todosOsProventos.filter(p =>
-        p.dataCom && p.dataPagamento &&
-        p.dataCom < hojeStr &&
-        p.dataPagamento > hojeStr
-    );
-
-    let htmlFinal = '';
-
-    corretoras.forEach(corretora => {
-        let valorTotalNaInstituicao = 0;
-        
-        const dadosInstituicao = {
-            contasCorrente: { total: 0, itens: [] },
-            contaInvestimento: { total: 0, itens: [] },
-            proventosProvisionados: { total: 0, itens: [] },
-            acoes: { total: 0, itens: [] },
-            fiis: { total: 0, itens: [] },
-            etfs: { total: 0, itens: [] },
-            rendaFixa: { total: 0, itens: [] }
+        const valoresBRL = {
+            patrimonioTotal: snapshot.patrimonioTotal,
+            valorTotalInvestimentos: snapshot.valorTotalInvestimentos,
+            valorFiis: valorFiisBRL,
+            valorAcoesOutros: valorAcoesOutrosBRL,
+            valorTotalContas: snapshot.valorTotalContas,
+            valorTotalMoedas: snapshot.valorTotalMoedas,
+            proventosProjetadosMensal: proventosProjetadosMensalBRL,
+            ibov: snapshot.ibov,
+            ifix: snapshot.ifix
         };
 
-        todasAsContas.filter(c => c.banco === corretora && !c.notas?.toLowerCase().includes('inativa')).forEach(conta => {
-            const saldoAtual = calcularSaldoEmData(conta, hojeStr);
-            valorTotalNaInstituicao += saldoAtual;
-            if (conta.tipo === 'Conta Corrente') {
-                dadosInstituicao.contasCorrente.total += saldoAtual;
-                dadosInstituicao.contasCorrente.itens.push({ ...conta, saldo: saldoAtual });
-            } else {
-                dadosInstituicao.contaInvestimento.total += saldoAtual;
-                dadosInstituicao.contaInvestimento.itens.push({ ...conta, saldo: saldoAtual });
+        const valoresConvertidos = {};
+        const variacoes = {};
+        
+        for (const key in valoresBRL) {
+            valoresConvertidos[key] = converterValor(valoresBRL[key]);
+            
+            if (anterior) {
+                const diff = valoresConvertidos[key] - anterior.valoresConvertidos[key];
+                const percent = anterior.valoresConvertidos[key] !== 0 ? diff / anterior.valoresConvertidos[key] : 0;
+                variacoes[key] = percent;
             }
-        });
-
-        Object.entries(posicoesRV).forEach(([ticker, dados]) => {
-            const qtdNaCorretora = dados.porCorretora[corretora] || 0;
-            if (qtdNaCorretora > 0.000001) {
-                const ativoInfo = todosOsAtivos.find(a => a.ticker === ticker) || {};
-                const cotacao = dadosDeMercado.cotacoes[ticker];
-                const valorMercado = (cotacao?.valor > 0) ? qtdNaCorretora * cotacao.valor : 0;
-                valorTotalNaInstituicao += valorMercado;
-
-                const item = { nome: ticker, tipo: ativoInfo.tipo || 'N/D', quantidade: qtdNaCorretora, valor: valorMercado };
-                if (ativoInfo.tipo === 'Ação') dadosInstituicao.acoes.itens.push(item);
-                else if (ativoInfo.tipo === 'FII') dadosInstituicao.fiis.itens.push(item);
-                else if (ativoInfo.tipo === 'ETF') dadosInstituicao.etfs.itens.push(item);
-            }
-        });
-        dadosInstituicao.acoes.total = dadosInstituicao.acoes.itens.reduce((s, a) => s + a.valor, 0);
-        dadosInstituicao.fiis.total = dadosInstituicao.fiis.itens.reduce((s, a) => s + a.valor, 0);
-        dadosInstituicao.etfs.total = dadosInstituicao.etfs.itens.reduce((s, a) => s + a.valor, 0);
-
-        todosOsAtivosRF.filter(a => a.instituicao === corretora && !(a.descricao || '').toLowerCase().includes('inativa')).forEach(ativo => {
-            const saldoAtivo = calcularSaldosRFEmData(ativo, hojeStr).saldoLiquido;
-            valorTotalNaInstituicao += saldoAtivo;
-            dadosInstituicao.rendaFixa.total += saldoAtivo;
-            dadosInstituicao.rendaFixa.itens.push({ nome: ativo.descricao, tipo: 'Renda Fixa', quantidade: null, valor: saldoAtivo });
-        });
-
-        proventosProvisionados.forEach(p => {
-            if (p.posicaoPorCorretora && p.posicaoPorCorretora[corretora]) {
-                const valorNaCorretora = p.posicaoPorCorretora[corretora].valorRecebido || 0;
-                valorTotalNaInstituicao += valorNaCorretora;
-                dadosInstituicao.proventosProvisionados.total += valorNaCorretora;
-                dadosInstituicao.proventosProvisionados.itens.push({
-                    nome: p.ticker,
-                    dataPagamento: p.dataPagamento,
-                    valor: valorNaCorretora
-                });
-            }
+        }
+        
+        dadosProcessados.push({ 
+            data: snapshot.data, 
+            valoresConvertidos, 
+            yieldProjetado, 
+            variacoes 
         });
         
-        if (valorTotalNaInstituicao > 0) {
-            const totalInvestimentos = dadosInstituicao.contaInvestimento.total + dadosInstituicao.proventosProvisionados.total + dadosInstituicao.acoes.total + dadosInstituicao.fiis.total + dadosInstituicao.etfs.total + dadosInstituicao.rendaFixa.total;
-
-            htmlFinal += `<div class="bloco-corretora">
-                            <div class="bloco-corretora-header">
-                                <h3>${corretora}</h3>
-                                <span class="total-corretora">${formatarMoeda(valorTotalNaInstituicao)}</span>
-                            </div>
-                            <div class="bloco-corretora-conteudo">`;
-
-            if (dadosInstituicao.contasCorrente.itens.length > 0) {
-                htmlFinal += `<div class="categoria-acordeao">
-                    <div class="acordeao-header">
-                        <h4><i class="fas fa-wallet"></i> Contas Correntes</h4>
-                        <div><span class="acordeao-valor">${formatarMoeda(dadosInstituicao.contasCorrente.total)}</span> <i class="fas fa-chevron-right acordeao-icone"></i></div>
-                    </div>
-                    <div class="acordeao-conteudo">
-                        <table><tbody>
-                            ${dadosInstituicao.contasCorrente.itens.map(c => `
-                                <tr>
-                                    <td>${c.tipo} (Ag: ${c.agencia || 'N/A'}, C/C: ${c.numero || 'N/A'}, Pix: ${c.pix || 'N/A'})</td>
-                                    <td class="numero"><strong>${formatarMoeda(c.saldo)}</strong></td>
-                                </tr>
-                            `).join('')}
-                        </tbody></table>
-                    </div>
-                </div>`;
-            }
-
-            if (totalInvestimentos > 0) {
-                htmlFinal += `<div class="categoria-acordeao">
-                    <div class="acordeao-header">
-                        <h4><i class="fas fa-chart-pie"></i> Investimentos</h4>
-                        <div><span class="acordeao-valor">${formatarMoeda(totalInvestimentos)}</span> <i class="fas fa-chevron-right acordeao-icone"></i></div>
-                    </div>
-                    <div class="acordeao-conteudo">`;
-                
-                const subcategorias = [
-                    { nome: 'Conta Investimento', dados: dadosInstituicao.contaInvestimento, isConta: true },
-                    { nome: 'Proventos Provisionados', dados: dadosInstituicao.proventosProvisionados, isConta: false, isProvento: true },
-                    { nome: 'Ações', dados: dadosInstituicao.acoes, isConta: false },
-                    { nome: 'FIIs', dados: dadosInstituicao.fiis, isConta: false },
-                    { nome: 'ETFs', dados: dadosInstituicao.etfs, isConta: false },
-                    { nome: 'Renda Fixa', dados: dadosInstituicao.rendaFixa, isConta: false }
-                ];
-
-                subcategorias.forEach(sub => {
-                    if (sub.dados.itens.length > 0) {
-                        let sortedItems = [...sub.dados.itens];
-                        if (sub.isProvento) {
-                            sortedItems.sort((a, b) => new Date(a.dataPagamento) - new Date(b.dataPagamento));
-                        } else {
-                            sortedItems.sort((a,b) => (a.nome || a.banco).localeCompare(b.nome || b.banco));
-                        }
-                        
-                        htmlFinal += `<div class="subcategoria-acordeao">
-                            <div class="acordeao-header">
-                                <h5>${sub.nome}</h5>
-                                <div><span class="acordeao-valor">${formatarMoeda(sub.dados.total)}</span> <i class="fas fa-chevron-right acordeao-icone"></i></div>
-                            </div>
-                            <div class="acordeao-conteudo">
-                                 <table><tbody>
-                                    ${sortedItems.map(item => {
-                                        if (sub.isConta) {
-                                            return `<tr>
-                                                        <td>${item.tipo} (Ag: ${item.agencia || 'N/A'}, C/C: ${item.numero || 'N/A'})</td>
-                                                        <td></td>
-                                                        <td class="numero"><strong>${formatarMoeda(item.saldo)}</strong></td>
-                                                    </tr>`;
-                                        } else if (sub.isProvento) {
-                                            return `<tr>
-                                                        <td>${item.nome}</td>
-                                                        <td class="numero" style="font-size: 0.9em; color: #555;">Paga em: ${new Date(item.dataPagamento + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
-                                                        <td class="numero"><strong>${formatarMoeda(item.valor)}</strong></td>
-                                                    </tr>`;
-                                        } else {
-                                            return `<tr>
-                                                        <td>${item.nome}</td>
-                                                        ${item.quantidade ? `<td class="numero">Qtd: ${Math.round(item.quantidade)}</td>` : '<td></td>'}
-                                                        <td class="numero"><strong>${formatarMoeda(item.valor)}</strong></td>
-                                                    </tr>`;
-                                        }
-                                    }).join('')}
-                                </tbody></table>
-                            </div>
-                        </div>`;
-                    }
-                });
-
-                htmlFinal += `</div></div>`;
-            }
-            
-            htmlFinal += `</div></div>`;
-        }
+        anterior = { valoresConvertidos };
     });
 
-    if (htmlFinal === '') {
-        container.innerHTML = '<p style="text-align: center;">Nenhuma posição encontrada.</p>';
-    } else {
-        container.innerHTML = htmlFinal;
-    }
-}
+    // Inverte para exibir do mais recente para o mais antigo na tabela
+    dadosProcessados.reverse();
 
-function calcularValorTotalInvestimentosAtual() {
-    const hoje = new Date().toISOString().split('T')[0];
+    // =================================================================================
+    // ETAPA 2: FILTRAGEM POR PERÍODO (MESES/ANOS)
+    // =================================================================================
     
-    // A função calcularValorTotalCarteira já soma RV + RF, que é exatamente o que queremos.
-    const valorCarteira = calcularValorTotalCarteira(hoje);
+    let dadosExibicao = [];
 
-    return arredondarMoeda(valorCarteira);
-}
+    if (filtroPeriodoSnapshot === 'all') {
+        dadosExibicao = dadosProcessados;
+    } else {
+        const dataLimite = new Date();
+        // Converte o valor do filtro (string '1', '3', '12') para número e subtrai os meses
+        const mesesParaSubtrair = parseInt(filtroPeriodoSnapshot);
+        dataLimite.setMonth(dataLimite.getMonth() - mesesParaSubtrair);
+        dataLimite.setHours(0, 0, 0, 0);
 
-function calcularValorMercadoSnapshot(snapshot, alvo, tipo) {
-    let total = 0;
-
-    if (tipo === 'categoria') {
-        if (alvo === 'Renda Fixa') {
-            if (snapshot.detalhesCarteira && snapshot.detalhesCarteira.rendaFixa) {
-                snapshot.detalhesCarteira.rendaFixa.forEach(rf => total += (rf.saldoLiquido || 0));
-            } else {
-                // Compatibilidade com snapshots antigos
-                total = snapshot.detalhesCarteira?.valorPorClasse?.['Renda Fixa'] || 0;
-            }
-        } else {
-            // Categorias de RV
-            if (snapshot.detalhesCarteira && snapshot.detalhesCarteira.ativos) {
-                for (const ticker in snapshot.detalhesCarteira.ativos) {
-                    const ativoSnap = snapshot.detalhesCarteira.ativos[ticker];
-                    const ativoCadastro = todosOsAtivos.find(a => a.ticker === ticker);
-                    const tipoMapeado = ativoCadastro ? (ativoCadastro.tipo === 'Ação' ? 'Ações' : ativoCadastro.tipo === 'FII' ? 'FIIs' : 'ETFs') : null;
-
-                    if (tipoMapeado === alvo) {
-                        total += (ativoSnap.valorDeMercado || (ativoSnap.quantidade * ativoSnap.precoAtual));
-                    }
-                }
-            }
-        }
-    } else if (tipo === 'ativo') {
-        // Ativo Individual
-        if (snapshot.detalhesCarteira && snapshot.detalhesCarteira.ativos && snapshot.detalhesCarteira.ativos[alvo]) {
-            const ativoSnap = snapshot.detalhesCarteira.ativos[alvo];
-            total = (ativoSnap.valorDeMercado || (ativoSnap.quantidade * ativoSnap.precoAtual));
-        }
+        dadosExibicao = dadosProcessados.filter(item => {
+            const dataItem = new Date(item.data + 'T00:00:00');
+            return dataItem >= dataLimite;
+        });
     }
-    return total;
-}
 
-function calcularFluxoLiquidoPeriodo(alvo, tipo, dataInicio, dataFim) {
-    let fluxoLiquido = 0;
+    // =================================================================================
+    // ETAPA 3: CÁLCULO DE MÁXIMAS E MÍNIMAS (Baseado APENAS no filtro atual)
+    // =================================================================================
 
-    // Se fosse Renda Fixa, retornaria aqui. Como foi removida do gráfico, mantemos a lógica 
-    // apenas para compatibilidade se chamada de outros lugares, ou removemos se for exclusivo do gráfico.
-    // Vou manter a lógica de RF caso seja usada em outro contexto, mas o foco é RV.
-    if (alvo === 'Renda Fixa') {
-        todasAsMovimentacoes.forEach(mov => {
-            if (mov.data > dataInicio && mov.data <= dataFim) {
-                if (mov.source === 'aporte_rf') fluxoLiquido += Math.abs(mov.valor);
-                else if (mov.source === 'resgate_rf') fluxoLiquido -= Math.abs(mov.valor);
+    const maxValues = { patrimonioTotal: 0, valorTotalInvestimentos: 0, valorFiis: 0, valorAcoesOutros: 0, valorTotalContas: 0, valorTotalMoedas: 0, proventosProjetadosMensal: 0, ibov: 0, ifix: 0 };
+    const minValues = { patrimonioTotal: Infinity, valorTotalInvestimentos: Infinity, valorFiis: Infinity, valorAcoesOutros: Infinity, valorTotalContas: Infinity, valorTotalMoedas: Infinity, proventosProjetadosMensal: Infinity, ibov: Infinity, ifix: Infinity };
+
+    if (dadosExibicao.length > 0) {
+        dadosExibicao.forEach(item => {
+            for (const key in maxValues) {
+                const val = item.valoresConvertidos[key];
+                
+                // Máxima
+                if (val > maxValues[key]) maxValues[key] = val;
+                
+                // Mínima (apenas > 0)
+                if (val > 0 && val < minValues[key]) minValues[key] = val;
             }
         });
-        return fluxoLiquido;
     }
 
-    // Para RV (Varre Notas, Histórico e Eventos)
-    const processarTransacao = (ticker, valorTransacao, tipoOp, custosOp) => {
-        let pertence = false;
-        const ativoCadastro = todosOsAtivos.find(a => a.ticker === ticker);
-        
-        if (alvo === 'Carteira RV') {
-            // Se o alvo é a carteira consolidada, aceita qualquer ativo de RV
-            pertence = ativoCadastro && ['Ação', 'FII', 'ETF'].includes(ativoCadastro.tipo);
-        } else if (tipo === 'ativo') {
-            pertence = (ticker === alvo);
-        } else {
-            // Se é categoria específica (Ações, FIIs)
-            const tipoMapeado = ativoCadastro ? (ativoCadastro.tipo === 'Ação' ? 'Ações' : ativoCadastro.tipo === 'FII' ? 'FIIs' : 'ETFs') : null;
-            pertence = (tipoMapeado === alvo);
-        }
+    // =================================================================================
+    // ETAPA 4: MONTAGEM DO HTML
+    // =================================================================================
 
-        if (pertence) {
-            if (tipoOp === 'compra') {
-                // Compra = Aporte = Fluxo Positivo
-                fluxoLiquido += (valorTransacao + custosOp);
-            } else if (tipoOp === 'venda') {
-                // Venda = Retirada = Fluxo Negativo
-                fluxoLiquido -= (valorTransacao - custosOp);
-            }
-        }
+    // Função interna para trocar o filtro
+    window.alterarFiltroPeriodo = (valor) => {
+        filtroPeriodoSnapshot = valor;
+        renderizarTelaHistoricoSnapshots(); // Re-renderiza mantendo a moeda
     };
 
-    // 1. Notas de Negociação
-    todasAsNotas.forEach(nota => {
-        if (nota.data > dataInicio && nota.data <= dataFim) {
-            const totalNota = nota.operacoes.reduce((sum, o) => sum + o.valor, 0);
-            nota.operacoes.forEach(op => {
-                const custosOp = totalNota > 0 ? (op.valor / totalNota) * (nota.custos + nota.irrf) : 0;
-                processarTransacao(op.ativo, op.valor, op.tipo, custosOp);
-            });
-        }
-    });
+    let finalHtml = `
+        <div class="header-controles-snapshot">
+            <div class="titulo-com-filtro">
+                <h3>Histórico Diário</h3>
+                <select id="filtro-periodo-snapshot" class="select-periodo-snapshot" onchange="alterarFiltroPeriodo(this.value)">
+                    <option value="1" ${filtroPeriodoSnapshot === '1' ? 'selected' : ''}>1 Mês</option>
+                    <option value="3" ${filtroPeriodoSnapshot === '3' ? 'selected' : ''}>3 Meses</option>
+                    <option value="6" ${filtroPeriodoSnapshot === '6' ? 'selected' : ''}>6 Meses</option>
+                    <option value="12" ${filtroPeriodoSnapshot === '12' ? 'selected' : ''}>1 Ano</option>
+                    <option value="all" ${filtroPeriodoSnapshot === 'all' ? 'selected' : ''}>Tudo</option>
+                </select>
+            </div>
 
-    // 2. Posição Inicial (apenas se data cair no intervalo)
-    posicaoInicial.forEach(p => {
-        if (p.tipoRegistro === 'TRANSACAO_HISTORICA' && p.data > dataInicio && p.data <= dataFim) {
-            const val = p.transacao.toLowerCase() === 'compra' ? (p.quantidade * p.precoMedio) : (p.valorVenda || (p.quantidade * p.precoMedio));
-            processarTransacao(p.ticker, val, p.transacao.toLowerCase(), 0);
-        }
-    });
+            <div class="snapshot-legenda">
+                <div class="legenda-item">
+                    <span class="legenda-box box-max"></span>
+                    <span>Máxima</span>
+                </div>
+                <div class="legenda-item">
+                    <span class="legenda-box box-min"></span>
+                    <span>Mínima</span>
+                </div>
+            </div>
+        </div>
+    `;
 
-    // 3. Eventos de Ativo (Entrada/Saída não financeira com custo)
-    todosOsAjustes.forEach(a => {
-        if (a.tipoAjuste === 'evento_ativo' && a.data > dataInicio && a.data <= dataFim) {
-            const qtd = a.detalhes.reduce((sum, d) => sum + d.quantidade, 0);
-            const valorEstimado = qtd * (a.precoMedio || 0); 
+    if (dadosExibicao.length === 0) {
+        finalHtml += `<div class="alert alert-warning">Nenhum snapshot encontrado para o período selecionado (${filtroPeriodoSnapshot === 'all' ? 'Tudo' : filtroPeriodoSnapshot + ' meses'}).</div>`;
+    } else {
+        finalHtml += `<table>
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th class="numero">Patrimônio Total${sufixoMoeda}</th>
+                    <th class="numero">Total Investido${sufixoMoeda}</th>
+                    <th class="numero">FIIs${sufixoMoeda}</th>
+                    <th class="numero">Ações/Outros${sufixoMoeda}</th>
+                    <th class="numero">Saldo Contas${sufixoMoeda}</th>
+                    <th class="numero">Saldo Moedas${sufixoMoeda}</th>
+                    <th class="numero">Proventos Projetados${sufixoMoeda}</th>
+                    <th class="numero">IBOV</th>
+                    <th class="numero">IFIX</th>
+                    <th class="controles-col">Ações</th>
+                </tr>
+            </thead>
+            <tbody id="tbody-snapshots">`;
+
+        dadosExibicao.forEach((item, index) => {
+            const dataFormatada = new Date(item.data + 'T12:00:00').toLocaleDateString('pt-BR');
             
-            if (a.tipoEvento === 'entrada') {
-                processarTransacao(a.ticker, valorEstimado, 'compra', 0);
+            const isSelected = snapshotsSelecionados.includes(item.data);
+            const classeSelecionada = isSelected ? 'linha-snapshot-selecionada' : '';
+            
+            const getCellHtml = (key, isCurrency = true) => {
+                const valor = item.valoresConvertidos[key];
+                
+                // Comparações com os extremos CALCULADOS NESTE PERÍODO
+                const isMax = Math.abs(valor - maxValues[key]) < 0.005 && valor > 0;
+                // Se o valor for igual à máxima e à mínima (ex: só tem 1 linha), prioriza máxima (verde)
+                const isMin = Math.abs(valor - minValues[key]) < 0.005 && valor > 0 && !isMax;
+
+                let classeValor = '';
+                if (isMax) classeValor = 'snapshot-max-value';
+                else if (isMin) classeValor = 'snapshot-min-recent';
+                
+                let valorFmt, diffHtml = '';
+                if (isCurrency) {
+                    valorFmt = formatFunction(valor);
+                } else {
+                    valorFmt = formatDecimalFunction(valor);
+                }
+
+                if (index < dadosExibicao.length - 1) {
+                    const diff = item.variacoes[key] || 0;
+                    const classeDiff = diff >= 0 ? 'valor-positivo' : 'valor-negativo';
+                    const prefixo = "Var:";
+                    diffHtml = `<span class="valor-secundario ${classeDiff}" style="display: block; font-size: 0.8em; text-align: right;">${prefixo} ${formatarPercentual(diff)}</span>`;
+                }
+
+                return `<td class="numero ${classeValor}">
+                            <div style="text-align: right;">
+                                <span class="valor-principal">${valorFmt}</span>
+                                ${diffHtml}
+                            </div>
+                        </td>`;
+            };
+            
+            // Coluna Proventos
+            const proventoValor = item.valoresConvertidos.proventosProjetadosMensal;
+            const isMaxProvento = Math.abs(proventoValor - maxValues.proventosProjetadosMensal) < 0.005 && proventoValor > 0;
+            const isMinProvento = Math.abs(proventoValor - minValues.proventosProjetadosMensal) < 0.005 && proventoValor > 0 && !isMaxProvento;
+            
+            let classeValorProvento = '';
+            if (isMaxProvento) classeValorProvento = 'snapshot-max-value';
+            else if (isMinProvento) classeValorProvento = 'snapshot-min-recent';
+
+            let proventoDiffHtml = '';
+            if (index < dadosExibicao.length - 1) {
+                const proventoDiff = item.variacoes.proventosProjetadosMensal || 0;
+                const classeDiff = proventoDiff >= 0 ? 'valor-positivo' : 'valor-negativo';
+                const prefixo = "Var:";
+                proventoDiffHtml = `<span class="valor-secundario ${classeDiff}" style="display: block; font-size: 0.8em; text-align: right;">${prefixo} ${formatarPercentual(proventoDiff)}</span>`;
+            }
+            
+            const proventoHtml = `<td class="numero ${classeValorProvento}">
+                                    <div style="text-align: right;">
+                                        <span class="valor-principal">${formatFunction(proventoValor)}</span>
+                                        <small style="display: block; color: #555; font-size: 0.8em; text-align: right;">(${formatarPercentual(item.yieldProjetado)} a.a.)</small>
+                                        ${proventoDiffHtml}
+                                    </div>
+                                </td>`;
+
+            finalHtml += `
+                <tr class="row-clickable ${classeSelecionada}" data-data="${item.data}">
+                    <td>${dataFormatada}</td>
+                    ${getCellHtml('patrimonioTotal')}
+                    ${getCellHtml('valorTotalInvestimentos')}
+                    ${getCellHtml('valorFiis')}
+                    ${getCellHtml('valorAcoesOutros')}
+                    ${getCellHtml('valorTotalContas')}
+                    ${getCellHtml('valorTotalMoedas')}
+                    ${proventoHtml}
+                    ${getCellHtml('ibov', false)}
+                    ${getCellHtml('ifix', false)}
+                    <td class="controles-col">
+                        <button class="btn btn-primary btn-sm btn-detalhes-snapshot" data-data="${item.data}">Detalhes</button>
+                    </td>
+                </tr>`;
+        });
+
+        finalHtml += `</tbody></table>`;
+    }
+
+    // BOTÃO COMPARAR (Mantido)
+    finalHtml += `
+        <button id="btn-comparar-snapshots" onclick="abrirModalComparacaoSnapshots()">
+            <i class="fas fa-balance-scale"></i> Comparar (<span id="count-comparar">0</span>)
+        </button>
+    `;
+
+    container.innerHTML = finalHtml;
+
+    // --- LÓGICA DE INTERAÇÃO ---
+    const linhas = container.querySelectorAll('tbody tr');
+    const btnComparar = document.getElementById('btn-comparar-snapshots');
+    const spanCount = document.getElementById('count-comparar');
+
+    const atualizarInterface = () => {
+        const total = snapshotsSelecionados.length;
+        if (spanCount) spanCount.textContent = total;
+        if (btnComparar) btnComparar.style.display = total >= 2 ? 'block' : 'none';
+
+        linhas.forEach(tr => {
+            const dataRow = tr.getAttribute('data-data');
+            if (snapshotsSelecionados.includes(dataRow)) {
+                tr.classList.add('linha-snapshot-selecionada');
+                tr.classList.remove('snapshot-bloqueado');
             } else {
-                processarTransacao(a.ticker, valorEstimado, 'venda', 0);
+                tr.classList.remove('linha-snapshot-selecionada');
+                if (total >= 3) {
+                    tr.classList.add('snapshot-bloqueado');
+                    tr.title = "Limite de 3 snapshots atingido.";
+                } else {
+                    tr.classList.remove('snapshot-bloqueado');
+                    tr.title = "Clique para selecionar.";
+                }
             }
-        }
-    });
+        });
+    };
 
-    return fluxoLiquido;
-}
-
-function calcularProventosRecebidosPeriodo(alvo, tipo, dataInicio, dataFim) {
-    let totalProventos = 0;
-
-    if (alvo === 'Renda Fixa') return 0; 
-
-    todosOsProventos.forEach(p => {
-        // Define qual data usar para o cálculo de performance:
-        // Prioridade: Data-Ex (Dia útil após Data-Com) para casar com o ajuste de preço.
-        // Fallback: Data de Pagamento (se não houver Data-Com).
-        let dataConsiderada = null;
-        
-        if (p.dataCom) {
-            dataConsiderada = getProximaDataUtil(p.dataCom);
-        } else {
-            dataConsiderada = p.dataPagamento;
-        }
-
-        if (dataConsiderada && dataConsiderada > dataInicio && dataConsiderada <= dataFim) {
-            let pertence = false;
-            const ativoCadastro = todosOsAtivos.find(a => a.ticker === p.ticker);
-
-            if (alvo === 'Carteira RV') {
-                // Soma proventos de qualquer ativo de RV
-                pertence = ativoCadastro && ['Ação', 'FII', 'ETF'].includes(ativoCadastro.tipo);
-            } else if (tipo === 'ativo') {
-                pertence = (p.ticker === alvo);
+    linhas.forEach(tr => {
+        tr.addEventListener('click', (e) => {
+            if (e.target.closest('.btn-detalhes-snapshot')) return;
+            const data = tr.getAttribute('data-data');
+            if (snapshotsSelecionados.includes(data)) {
+                snapshotsSelecionados = snapshotsSelecionados.filter(d => d !== data);
             } else {
-                const tipoMapeado = ativoCadastro ? (ativoCadastro.tipo === 'Ação' ? 'Ações' : ativoCadastro.tipo === 'FII' ? 'FIIs' : 'ETFs') : null;
-                pertence = (tipoMapeado === alvo);
+                if (snapshotsSelecionados.length < 3) {
+                    snapshotsSelecionados.push(data);
+                } else {
+                    tr.classList.add('shake-animation');
+                    setTimeout(() => tr.classList.remove('shake-animation'), 500);
+                }
             }
-
-            if (pertence) {
-                totalProventos += p.valorTotalRecebido;
-            }
-        }
+            atualizarInterface();
+        });
     });
 
-    return totalProventos;
+    atualizarInterface();
 }
-
-function gerarDadosCalendarioRecorrentes(tipo) {
-    const dadosAgrupados = new Map();
-    const filhos = gerarTransacoesFilhas().filter(f => f.targetType === tipo);
-    const items = (tipo === 'conta') ? todasAsContas : todosOsAtivosMoedas;
-
-    filhos.forEach(filho => {
-        const itemId = String(filho.targetId);
-        const itemInfo = items.find(i => String(i.id) === itemId);
-        if (!itemInfo) return; 
-
-        if (!dadosAgrupados.has(itemId)) {
-            dadosAgrupados.set(itemId, {
-                itemInfo: {
-                    nome: tipo === 'conta' ? `${itemInfo.banco} - ${itemInfo.tipo}` : itemInfo.nomeAtivo,
-                    moeda: tipo === 'conta' ? 'BRL' : itemInfo.moeda
-                },
-                regras: new Map() 
-            });
-        }
-        
-        const grupoItem = dadosAgrupados.get(itemId);
-        const mae = todasAsTransacoesRecorrentes.find(m => String(m.id) === String(filho.sourceId));
-        if (!mae) return;
-
-        if (!grupoItem.regras.has(mae.id)) {
-            grupoItem.regras.set(mae.id, {
-                descricao: mae.descricao,
-                datas: new Map()
-            });
-        }
-        
-        const grupoRegra = grupoItem.regras.get(mae.id);
-        grupoRegra.datas.set(filho.data, filho.valor);
-    });
-
-    return dadosAgrupados;
-}
-
-function abrirModalDetalhesRendimentoMensal(ano, mes, tipo, dadosCalendario) {
-    const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-    const titulo = `Detalhes de ${tipo} - ${meses[mes]} de ${ano}`;
-    document.getElementById('modal-detalhes-rendimento-titulo').textContent = titulo;
-
-    const container = document.getElementById('container-detalhes-rendimento');
-    const dadosDetalhados = dadosCalendario[ano]?.[mes]?.[tipo] || [];
-
-    if (dadosDetalhados.length === 0) {
-        container.innerHTML = '<p>Nenhum detalhe encontrado.</p>';
-        abrirModal('modal-detalhes-rendimento');
+function abrirModalComparacaoSnapshots() {
+    // 1. Validação Básica
+    if (!snapshotsSelecionados || snapshotsSelecionados.length < 2) {
+        alert("Selecione pelo menos 2 datas para comparar.");
         return;
     }
 
-    let tableHtml = '';
-    // Caso especial para Renda Fixa, que tem uma estrutura de dados diferente
-    if (tipo === 'Renda Fixa') {
-        tableHtml = `<table class="dashboard-table">
-            <thead><tr>
-                <th>Descrição do Ativo</th>
-                <th class="numero">Rendimento no Mês</th>
-            </tr></thead><tbody>`;
-        dadosDetalhados.forEach(item => {
-            tableHtml += `<tr>
-                <td>${item.descricao}</td>
-                <td class="numero">${formatarMoeda(item.valor)}</td>
-            </tr>`;
+    // 2. Busca e Ordena os Objetos (Do mais antigo para o mais recente)
+    const dadosSelecionados = historicoCarteira
+        .filter(s => snapshotsSelecionados.includes(s.data))
+        .sort((a, b) => new Date(a.data) - new Date(b.data));
+
+    const container = document.getElementById('body-comparacao-snapshots');
+    container.innerHTML = ''; 
+
+    // --- FUNÇÕES AUXILIARES DE FORMATAÇÃO ---
+    const calcDiff = (atual, anterior) => {
+        if (!anterior || anterior === 0) return { abs: 0, pct: 0 };
+        const abs = atual - anterior;
+        const pct = (abs / anterior) * 100;
+        return { abs, pct };
+    };
+
+    const renderDiffBadge = (diffObj, isCurrency = true) => {
+        if (diffObj.abs === 0 && diffObj.pct === 0) return '<small class="diff-neutral">-</small>';
+        const colorClass = diffObj.abs >= 0 ? 'diff-positive' : 'diff-negative';
+        const icon = diffObj.abs >= 0 ? '▲' : '▼';
+        const absFmt = isCurrency ? formatarMoeda(diffObj.abs) : formatarDecimal(diffObj.abs, 2);
+        return `<span class="comp-diff-badge ${colorClass}">
+                    ${icon} ${absFmt} <small>(${formatarDecimal(diffObj.pct, 2)}%)</small>
+                </span>`;
+    };
+
+    // --- CÁLCULO ESTRUTURAL DE RV (Snapshots) ---
+    dadosSelecionados.forEach(snap => {
+        let custoTotalRV = 0;
+        let mercadoTotalRV = 0;
+
+        if (snap.detalhesCarteira && snap.detalhesCarteira.ativos) {
+            Object.values(snap.detalhesCarteira.ativos).forEach(ativo => {
+                const qtd = ativo.quantidade || 0;
+                const pm = ativo.precoMedio || 0;
+                const valorMercado = ativo.valorDeMercado || (qtd * (ativo.precoAtual || 0));
+                
+                custoTotalRV += (qtd * pm);
+                mercadoTotalRV += valorMercado;
+            });
+        }
+        snap.statsRV = {
+            custo: custoTotalRV,
+            mercado: mercadoTotalRV,
+            resultadoAcumulado: mercadoTotalRV - custoTotalRV 
+        };
+    });
+
+    // --- MONTAGEM DO GRID ---
+    const gridStyle = `grid-template-columns: 200px repeat(${dadosSelecionados.length}, 1fr);`;
+    let html = `<div class="comp-grid-container" style="${gridStyle}">`;
+
+    // Cabeçalho das Datas
+    html += `<div class="comp-header-cell">Indicador</div>`;
+    dadosSelecionados.forEach(d => {
+        const dataFmt = new Date(d.data + 'T12:00:00').toLocaleDateString('pt-BR');
+        html += `<div class="comp-header-cell">${dataFmt}</div>`;
+    });
+
+    // BLOCO 1: PATRIMÔNIO MACRO
+    html += `<div class="comp-section-title">Resumo Patrimonial</div>`;
+    
+    const gerarLinha = (titulo, valorGetter, isCurrency = true) => {
+        html += `<div class="comp-label-cell">${titulo}</div>`;
+        let valorAnterior = null;
+        dadosSelecionados.forEach((snap, index) => {
+            const valorAtual = valorGetter(snap);
+            let diffHtml = '';
+            if (index > 0) {
+                const diff = calcDiff(valorAtual, valorAnterior);
+                diffHtml = renderDiffBadge(diff, isCurrency);
+            }
+            const valorFmt = isCurrency ? formatarMoeda(valorAtual) : formatarDecimal(valorAtual, 2);
+            html += `<div class="comp-data-cell">
+                        <div style="font-size: 1.1em;">${valorFmt}</div>
+                        ${diffHtml}
+                     </div>`;
+            valorAnterior = valorAtual;
         });
-        tableHtml += `</tbody></table>`;
-    } else { // Caso para Ações, FIIs, ETFs
-        tableHtml = `<table class="dashboard-table">
-            <thead><tr>
-                <th>Ativo</th>
-                <th>Data Com</th>
-                <th>Data Pag.</th>
-                <th class="numero">Valor Unitário</th>
-                <th class="numero">Valor Total</th>
-            </tr></thead><tbody>`;
-        // Ordena para mostrar os maiores valores primeiro
-        dadosDetalhados.sort((a, b) => b.valor - a.valor).forEach(item => {
-            tableHtml += `<tr>
-                <td>${item.ticker}</td>
-                <td>${new Date(item.dataCom + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
-                <td>${new Date(item.dataPagamento + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
-                <td class="numero">${formatarPrecoMedio(item.valorIndividual)}</td>
-                <td class="numero"><strong>${formatarMoeda(item.valor)}</strong></td>
-            </tr>`;
-        });
-        tableHtml += `</tbody></table>`;
+    };
+
+    gerarLinha('Patrimônio Total', s => s.patrimonioTotal);
+    gerarLinha('Total Investido', s => s.valorTotalInvestimentos);
+    gerarLinha('Caixa (Contas + Moedas)', s => (s.valorTotalContas + s.valorTotalMoedas));
+
+    // BLOCO 2: RAIO-X RV
+    html += `<div class="comp-section-title">Raio-X Renda Variável (Ações/FIIs/ETFs)</div>`;
+    gerarLinha('Saldo em RV (Mercado)', s => s.statsRV.mercado);
+    gerarLinha('Total Aportado (Custo)', s => s.statsRV.custo);
+    gerarLinha('Resultado Latente', s => s.statsRV.resultadoAcumulado);
+
+    // --- CÁLCULOS DO CARD DE ANÁLISE (APORTE VS PROVENTOS) ---
+    const primeiro = dadosSelecionados[0];
+    const ultimo = dadosSelecionados[dadosSelecionados.length - 1];
+    
+    const deltaTotalRV = ultimo.statsRV.mercado - primeiro.statsRV.mercado;
+    const deltaAporte = ultimo.statsRV.custo - primeiro.statsRV.custo; // Isso é o "Dinheiro Novo Total"
+    const deltaValorizacao = deltaTotalRV - deltaAporte;
+
+    const textoAporte = deltaAporte >= 0 ? 'Novos Aportes' : 'Vendas/Retiradas';
+    const corAporte = deltaAporte >= 0 ? '#198754' : '#dc3545';
+    const textoValorizacao = deltaValorizacao >= 0 ? 'Valorização de Ativos' : 'Desvalorização de Ativos';
+    const corValorizacao = deltaValorizacao >= 0 ? '#198754' : '#dc3545';
+
+    // -- INTELIGÊNCIA DE PROVENTOS (Corrigida conforme sua função de gráfico) --
+    let subItensAporteHtml = '';
+    
+    // Só detalhamos se houve entrada de dinheiro (Aporte Positivo)
+    if (deltaAporte > 0) {
+        // 1. Soma os proventos PAGOS no intervalo entre os snapshots
+        // Intervalo: (Data Snapshot 1) < Data Pagamento <= (Data Snapshot 2)
+        const totalProventosNoPeriodo = todosOsProventos.reduce((acc, prov) => {
+            if (prov.dataPagamento) {
+                if (prov.dataPagamento > primeiro.data && prov.dataPagamento <= ultimo.data) {
+                    return acc + (prov.valorTotalRecebido || 0);
+                }
+            }
+            return acc;
+        }, 0);
+
+        // 2. Regra do "Primeiro Dinheiro": 
+        // Se Aporte Total = 1000 e Recebi 200 de Proventos -> 200 Proventos, 800 Bolso.
+        // Se Aporte Total = 1000 e Recebi 5000 de Proventos -> 1000 Proventos (reinvesti parte), 0 Bolso.
+        const aporteViaProventos = Math.min(deltaAporte, totalProventosNoPeriodo);
+        const aporteViaExterno = deltaAporte - aporteViaProventos;
+
+        subItensAporteHtml = `
+            <div class="comp-sub-item">
+                <span>↳ Recursos de Proventos:</span>
+                <span title="Total Recebido no período: ${formatarMoeda(totalProventosNoPeriodo)}">${formatarMoeda(aporteViaProventos)}</span>
+            </div>
+            <div class="comp-sub-item">
+                <span>↳ Recursos Externos (Do Bolso):</span>
+                <span>${formatarMoeda(aporteViaExterno)}</span>
+            </div>
+        `;
     }
 
+    html += `</div>`; // Fecha Grid Container
+
+    // CARD DE ANÁLISE FINAL
+    html += `
+    <div class="comp-analysis-card">
+        <h4 style="margin-top:0; color:#007bff">Resumo do Período (${new Date(primeiro.data).toLocaleDateString('pt-BR')} a ${new Date(ultimo.data).toLocaleDateString('pt-BR')})</h4>
+        <p>A sua carteira de Renda Variável variou <b>${formatarMoeda(deltaTotalRV)}</b> neste período. Veja a composição:</p>
+        
+        <div class="comp-analysis-row" style="flex-direction: column; align-items: normal;">
+            <div style="display:flex; justify-content:space-between; width:100%;">
+                <span>1. Movimentação Financeira (${textoAporte}):</span>
+                <span style="color:${corAporte}; font-weight:bold;">${formatarMoeda(deltaAporte)}</span>
+            </div>
+            ${subItensAporteHtml}
+        </div>
+        
+        <div class="comp-analysis-row">
+            <span>2. Efeito de Mercado (${textoValorizacao}):</span>
+            <span style="color:${corValorizacao}; font-weight:bold;">${formatarMoeda(deltaValorizacao)}</span>
+        </div>
+    </div>
+    `;
+
+    // BLOCO 3: BENCHMARKS
+    html += `<div style="margin-top:20px; border-bottom: 2px solid #007bff; padding-bottom:5px; font-weight:bold; color:#2c3e50;">Indicadores e Benchmarks</div>`;
+    html += `<div class="comp-grid-container" style="${gridStyle}; border-bottom:none;">`;
+    gerarLinha('Proventos Projetados/Mês', s => calcularProjecaoHistoricaParaSnapshot(s));
+    gerarLinha('IBOV (Pontos)', s => s.ibov, false);
+    gerarLinha('IFIX (Pontos)', s => s.ifix, false);
+    html += `</div>`;
+
+    container.innerHTML = html;
+    document.getElementById('modal-comparacao-snapshots').style.display = 'block';
+}
+function abrirModalDetalhesSnapshot(data) {
+    const snapshot = historicoCarteira.find(s => s.data === data);
+    if (!snapshot) {
+        alert('Erro: Snapshot não encontrado para esta data.');
+        return;
+    }
+
+    const modalTitulo = document.getElementById('modal-snapshot-detalhes-titulo');
+    const modalConteudo = document.getElementById('modal-snapshot-detalhes-conteudo');
+    const dataFormatada = new Date(data + 'T12:00:00').toLocaleDateString('pt-BR');
+    
+    modalTitulo.textContent = `Detalhes da Carteira em ${dataFormatada}`;
+
+    let htmlConteudo = `<div class="snapshot-summary">
+        <div class="summary-item"><label>Patrimônio Total</label><span>${formatarMoeda(snapshot.patrimonioTotal)}</span></div>
+        <div class="summary-item"><label>Total Investido</label><span>${formatarMoeda(snapshot.valorTotalInvestimentos)}</span></div>
+        <div class="summary-item"><label>Saldo em Contas</label><span>${formatarMoeda(snapshot.valorTotalContas)}</span></div>
+        <div class="summary-item"><label>Saldo em Moedas</label><span>${formatarMoeda(snapshot.valorTotalMoedas)}</span></div>
+    </div>`;
+
+    const detalhes = snapshot.detalhesCarteira;
+
+    if (detalhes.ativos && Object.keys(detalhes.ativos).length > 0) {
+        htmlConteudo += '<h4>Ativos de Renda Variável</h4><table><thead><tr><th>Ativo</th><th class="numero">Qtd.</th><th class="numero">Preço Médio</th><th class="numero">Cotação do Dia</th><th class="numero">Valor de Mercado</th></tr></thead><tbody>';
+        Object.entries(detalhes.ativos).sort((a,b) => a[0].localeCompare(b[0])).forEach(([ticker, dados]) => {
+            if (dados.quantidade > 0.0001) {
+                const ativoInfo = todosOsAtivos.find(a => a.ticker === ticker);
+                const tipoHtml = ativoInfo ? `<small style="color: #555; margin-left: 8px;">(${ativoInfo.tipo})</small>` : '';
+                htmlConteudo += `<tr class="row-clickable" data-ticker="${ticker}" title="Clique para ver o histórico de cotações e preço médio">
+                    <td>${ticker}${tipoHtml}</td>
+                    <td class="numero">${Math.round(dados.quantidade)}</td>
+                    <td class="numero">${formatarMoeda(dados.precoMedio)}</td>
+                    <td class="numero">${formatarMoeda(dados.precoAtual)}</td>
+                    <td class="numero">${formatarMoeda(dados.valorDeMercado)}</td>
+                </tr>`;
+            }
+        });
+        htmlConteudo += `</tbody></table>`;
+    }
+
+    if (detalhes.rendaFixa && detalhes.rendaFixa.length > 0) {
+        htmlConteudo += '<h4>Aplicações de Renda Fixa</h4><table><thead><tr><th>Descrição</th><th class="numero">Valor Investido</th><th class="numero">Saldo Líquido</th></tr></thead><tbody>';
+        detalhes.rendaFixa.forEach(rf => {
+            if (rf.saldoLiquido > 0) {
+                htmlConteudo += `<tr>
+                    <td>${rf.descricao}</td>
+                    <td class="numero">${formatarMoeda(rf.valorInvestido)}</td>
+                    <td class="numero">${formatarMoeda(rf.saldoLiquido)}</td>
+                </tr>`;
+            }
+        });
+        htmlConteudo += `</tbody></table>`;
+    }
+    
+    modalConteudo.innerHTML = htmlConteudo;
+    abrirModal('modal-snapshot-detalhes');
+}
+function renderizarPosicoesZeradas() {
+    const container = document.getElementById('container-posicoes-zeradas');
+    const dados = gerarRelatorioPosicoesZeradas();
+    
+    if (dados.length === 0) {
+        container.innerHTML = "<p>Nenhuma posição zerada encontrada no seu histórico.</p>";
+        return;
+    }
+
+    let tableHtml = `<table><thead><tr>
+        <th>Ativo</th>
+        <th>Data de Início da Posição</th>
+        <th>Data de Encerramento da Posição</th>
+    </tr></thead><tbody>`;
+
+    dados.sort((a,b) => new Date(b.dataEncerramento) - new Date(a.dataEncerramento)).forEach(item => {
+        tableHtml += `
+            <tr>
+                <td>${item.ticker}</td>
+                <td>${new Date(item.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+                <td>${new Date(item.dataEncerramento + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+            </tr>
+        `;
+    });
+
+    tableHtml += "</tbody></table>";
     container.innerHTML = tableHtml;
-    abrirModal('modal-detalhes-rendimento');
+}
+function renderizarTelaHistoricoMovimentacao() {
+    mostrarTela('historicoMovimentacao');
+    const select = document.getElementById('select-ativo-historico');
+    const containerTabela = document.getElementById('container-tabela-movimentacoes');
+    containerTabela.innerHTML = '';
+    
+    const todosOsTickersHistorico = [...new Set(todosOsAtivos.map(a => a.ticker))];
+    const posicoesAtuais = gerarPosicaoDetalhada();
+    
+    const tickersComPosicao = new Set(Object.keys(posicoesAtuais).filter(t => posicoesAtuais[t].quantidade > 0.000001));
+    
+    let optionsHtml = '<option value="">Selecione um ativo...</option>';
+    todosOsTickersHistorico.sort().forEach(ticker => {
+        if (!tickersComPosicao.has(ticker)) {
+            optionsHtml += `<option value="${ticker}" class="posicao-zerada">${ticker} (zerada)</option>`;
+        } else {
+            optionsHtml += `<option value="${ticker}">${ticker}</option>`;
+        }
+    });
+
+    select.innerHTML = optionsHtml;
 }
 
+function renderizarTabelaHistoricoParaAtivo(ticker) {
+    const container = document.getElementById('container-tabela-movimentacoes');
+    if (!ticker) {
+        container.innerHTML = '';
+        return;
+    }
+    const historico = gerarHistoricoCompletoParaAtivo(ticker);
+
+    // --- CABEÇALHO ATUALIZADO ---
+    let tableHtml = `<h4>Movimentações para ${ticker}</h4><table><thead><tr>
+        <th>Data</th>
+        <th>Transação</th>
+        <th class="numero">Preço Unit. (R$)</th>
+        <th>Qtd. por Corretora</th>
+        <th class="numero">Qtd. Consolidada</th>
+        <th class="numero">Preço Médio</th>
+        <th class="numero">Valor Investido</th>
+    </tr></thead><tbody>`;
+
+    if (historico.length === 0) {
+        tableHtml += '<tr><td colspan="7" style="text-align: center;">Nenhuma movimentação encontrada para este ativo.</td></tr>';
+    } else {
+        historico.forEach(item => {
+            const dataFormatada = item.data ? new Date(item.data + 'T12:00:00').toLocaleDateString('pt-BR') : 'Data Inválida';
+            
+            // --- CÉLULA ATUALIZADA PARA EXIBIR O PREÇO UNITÁRIO ---
+            const precoUnitarioFmt = (item.precoUnitario !== null && item.precoUnitario > 0) ? formatarMoeda(item.precoUnitario) : 'N/A';
+            
+            tableHtml += `
+                <tr>
+                    <td>${dataFormatada}</td>
+                    <td>${item.descricaoTransacao}</td>
+                    <td class="numero">${precoUnitarioFmt}</td>
+                    <td>${item.qtdPorCorretora || 'N/A'}</td>
+                    <td class="numero">${Math.round(item.qtdConsolidada)}</td>
+                    <td class="numero">${formatarPrecoMedio(item.precoMedio)}</td>
+                    <td class="numero">${formatarMoeda(item.valorTotalInvestido)}</td>
+                </tr>`;
+        });
+    }
+
+    tableHtml += '</tbody></table>';
+    container.innerHTML = tableHtml;
+}
 function renderizarModalCalendarioRecorrentes() {
     const dadosContas = gerarDadosCalendarioRecorrentes('conta');
     const dadosMoedas = gerarDadosCalendarioRecorrentes('moeda');
@@ -4310,78 +3313,6 @@ function renderizarModalCalendarioRecorrentes() {
 
     container.innerHTML = htmlFinal;
     abrirModal('modal-calendario-recorrentes');
-}
-function gerarDadosProjecaoFutura() {
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const hojeStr = hoje.toISOString().split('T')[0];
-    const hojeMeiaNoite = new Date(hojeStr + 'T00:00:00');
-
-    const todosOsEventos = obterTodosOsEventosDeCaixa();
-    const items = [...getTodasContasAtivas(), ...todosOsAtivosMoedas]; // Combina todas as contas e ativos
-
-    // 1. Coleta corretamente as transações a partir de hoje (inclusive) para a projeção
-    const transacoesFuturas = todosOsEventos.filter(e => 
-        new Date(e.data + 'T12:00:00') >= hojeMeiaNoite
-    );
-    
-    if (transacoesFuturas.length === 0) {
-        return null;
-    }
-
-    const dataInicioProjecao = hoje;
-    const dataFinalProjecao = new Date(Math.max(...transacoesFuturas.map(t => new Date(t.data + 'T12:00:00'))));
-    
-    const datas = [];
-    for (let d = new Date(dataInicioProjecao); d <= dataFinalProjecao; d.setDate(d.getDate() + 1)) {
-        datas.push(new Date(d));
-    }
-    
-    if (datas.length === 0 && transacoesFuturas.length > 0) {
-        datas.push(hoje);
-    }
-
-    const dataMatrix = new Map();
-    
-    datas.forEach(data => {
-        const dataStr = data.toISOString().split('T')[0];
-        const transacoesDoDia = transacoesFuturas.filter(t => t.data === dataStr);
-        
-        transacoesDoDia.forEach(t => {
-            const itemIdStr = String(t.idAlvo);
-            if (!dataMatrix.has(itemIdStr)) {
-                dataMatrix.set(itemIdStr, new Map());
-            }
-            const eventosAtuais = dataMatrix.get(itemIdStr).get(dataStr) || [];
-            eventosAtuais.push(t);
-            dataMatrix.get(itemIdStr).set(dataStr, eventosAtuais);
-        });
-    });
-
-    const saldosIniciais = new Map();
-
-    items.forEach(item => {
-        const itemIdStr = String(item.id);
-        const tipoAlvo = (!item.moeda || item.moeda === 'BRL') ? 'conta' : 'moeda';
-        
-        const eventosPassados = todosOsEventos.filter(e =>
-            String(e.idAlvo) === itemIdStr &&
-            e.tipo === tipoAlvo &&
-            e.source !== 'recorrente_futura' &&
-            new Date(e.data + 'T12:00:00') < hojeMeiaNoite &&
-            new Date(e.data + 'T12:00:00') >= new Date(item.dataSaldoInicial + 'T12:00:00')
-        );
-        
-        const saldoInicialProjecao = eventosPassados.reduce((soma, e) => soma + e.valor, item.saldoInicial);
-        saldosIniciais.set(itemIdStr, saldoInicialProjecao);
-    });
-
-    return {
-        datas: datas.map(d => d.toISOString().split('T')[0]),
-        items,
-        saldosIniciais,
-        dataMatrix
-    };
 }
 function renderizarModalProjecaoFutura() {
     const dados = gerarDadosProjecaoFutura();
@@ -4690,210 +3621,114 @@ function abrirModalCadastroMeta(metaParaEditar = null) {
     abrirModal('modal-cadastro-meta');
     document.getElementById('meta-nome').focus();
 }
-function calcularCrescimentoCompostoMensal(historico) {
-    if (!historico || historico.length < 2) return null;
+function gerarHtmlExtratoParaAtivoMoeda(ativo, dataInicio, dataFim) {
+    const todosOsEventos = obterTodosOsEventosDeCaixa();
+    const hojeStr = new Date().toISOString().split('T')[0];
 
-    // Filtra o histórico para começar a partir do primeiro valor positivo.
-    const primeiroIndiceValido = historico.findIndex(p => p.valor > 0);
-    if (primeiroIndiceValido === -1) return null;
-    const historicoValido = historico.slice(primeiroIndiceValido);
-    if (historicoValido.length < 2) return null;
+    const dataAnteriorAoInicio = new Date(dataInicio + 'T00:00:00');
+    dataAnteriorAoInicio.setDate(dataAnteriorAoInicio.getDate() - 1);
+    const dataAnteriorAoInicioStr = dataAnteriorAoInicio.toISOString().split('T')[0];
 
-    const pontoInicial = historicoValido[0];
-    const pontoFinal = historicoValido[historicoValido.length - 1];
+    const transacoesPassadas = todosOsEventos.filter(e =>
+        e.tipo === 'moeda' &&
+        String(e.idAlvo) === String(ativo.id) &&
+        e.source !== 'recorrente_futura' &&
+        e.data <= dataAnteriorAoInicioStr &&
+        e.data >= ativo.dataSaldoInicial
+    );
+    const saldoInicialLinha = transacoesPassadas.reduce((acc, t) => acc + arredondarMoeda(t.valor), ativo.saldoInicial);
+    const labelSaldoInicialDaLinha = `Saldo em ${new Date(dataAnteriorAoInicioStr + 'T12:00:00').toLocaleDateString('pt-BR')}`;
 
-    const valorInicial = pontoInicial.valor;
-    const valorFinal = pontoFinal.valor;
-    const dataInicial = new Date(pontoInicial.data);
-    const dataFinal = new Date(pontoFinal.data);
+    const transacoesParaExibicao = todosOsEventos.filter(e =>
+        e.tipo === 'moeda' &&
+        String(e.idAlvo) === String(ativo.id) &&
+        e.data >= dataInicio &&
+        e.data <= dataFim &&
+        e.data >= ativo.dataSaldoInicial
+    ).sort((a, b) => new Date(a.data + 'T12:00:00') - new Date(b.data + 'T12:00:00'));
 
-    // Calcula o número de meses entre as datas.
-    const diffAnos = dataFinal.getFullYear() - dataInicial.getFullYear();
-    const nMeses = diffAnos * 12 + (dataFinal.getMonth() - dataInicial.getMonth());
+    let saldoCorrente = arredondarMoeda(saldoInicialLinha);
 
-    if (nMeses <= 0) return null; // Precisa de pelo menos um mês de intervalo.
+    let corpoTabela = `<tr>
+        <td>${new Date(dataInicio + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+        <td>${labelSaldoInicialDaLinha}</td>
+        <td class="numero"></td>
+        <td class="numero ${saldoCorrente < 0 ? 'valor-negativo' : ''}">${formatarMoedaEstrangeira(saldoCorrente, ativo.moeda)}</td>
+        <td class="controles-col"></td>
+    </tr>`;
 
-    // Fórmula do CAGR, adaptada para meses: (VF/VI)^(1/n) - 1
-    const taxaMensal = Math.pow(valorFinal / valorInicial, 1 / nMeses) - 1;
+    transacoesParaExibicao.forEach(evento => {
+        const valorArredondado = arredondarMoeda(evento.valor);
+        saldoCorrente += valorArredondado;
+        saldoCorrente = arredondarMoeda(saldoCorrente);
 
-    // Retorna a taxa apenas se for um número válido e positivo.
-    return (isNaN(taxaMensal) || !isFinite(taxaMensal) || taxaMensal <= 0) ? null : taxaMensal;
-}
+        const valorFmt = formatarMoedaEstrangeira(valorArredondado, ativo.moeda);
+        const valorClasse = valorArredondado < 0 ? 'valor-negativo' : 'valor-positivo';
+        const saldoClasse = saldoCorrente < 0 ? 'valor-negativo' : '';
 
-function calcularPrevisaoMeta(historico, valorAtual, valorAlvo) {
-    if (valorAtual >= valorAlvo) return "Meta Atingida!";
-    
-    const taxaMensal = calcularCrescimentoCompostoMensal(historico);
+        const isSynced = evento.enviarParaFinancas === true; // <<< CORREÇÃO AQUI
+        const iconeSync = isSynced ? '⇄ ' : '';
+        let linhaClasse = '';
+        let controles = '';
 
-    if (taxaMensal === null) {
-        // Se o histórico for curto, tenta uma média linear como fallback
-        if (historico.length >= 2) {
-             return "Crescimento negativo ou estagnado.";
+        if (evento.data === hojeStr) {
+            linhaClasse = 'data-hoje-bg';
         }
-        return "Dados insuficientes para previsão.";
-    }
 
-    // Fórmula de juros compostos para encontrar o número de meses: n = log(VF / VP) / log(1 + i)
-    const mesesParaAtingir = Math.log(valorAlvo / valorAtual) / Math.log(1 + taxaMensal);
-
-    if (isNaN(mesesParaAtingir) || !isFinite(mesesParaAtingir)) {
-        return "Não foi possível projetar a data.";
-    }
-    
-    if (mesesParaAtingir > 1200) { // Limite de 100 anos
-        return "Mais de 100 anos.";
-    }
-
-    const dataPrevista = new Date();
-    dataPrevista.setMonth(dataPrevista.getMonth() + Math.ceil(mesesParaAtingir));
-
-    return dataPrevista.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-}
-function getUltimoSnapshotPorData(dataStr) {
-    // Filtra todos os snapshots daquele dia e pega o último (o mais recente)
-    const snapshotsDoDia = historicoCarteira.filter(s => s.data === dataStr);
-    if (snapshotsDoDia.length > 0) {
-        return snapshotsDoDia[snapshotsDoDia.length - 1];
-    }
-    return null;
-}
-
-function abrirModalResumoNegociacao() {
-    const compras = [];
-    const vendas = [];
-
-    for (const tipo in dadosSimulacaoNegociar) {
-        if (tipo === 'fiis' || tipo === 'acoes') {
-            for (const ticker in dadosSimulacaoNegociar[tipo]) {
-                const sim = dadosSimulacaoNegociar[tipo][ticker];
-                if (sim.qtd && sim.qtd > 0) {
-                    compras.push({
-                        ticker: ticker,
-                        quantidade: sim.qtd,
-                        preco: sim.preco || 0,
-                        total: sim.qtd * (sim.preco || 0)
-                    });
-                } else if (sim.qtd && sim.qtd < 0) {
-                    vendas.push({
-                        ticker: ticker,
-                        quantidade: Math.abs(sim.qtd),
-                        preco: sim.preco || 0,
-                        total: Math.abs(sim.qtd) * (sim.preco || 0)
-                    });
-                }
-            }
+        if (evento.source === 'recorrente_futura') {
+            linhaClasse += ' transacao-futura';
+            controles = `
+                <i class="fas fa-check-circle acao-btn-recorrente" title="Confirmar esta ocorrência" data-mae-id="${evento.maeId}" data-ocorrencia-data="${evento.data}" data-action="CONFIRMAR_OCORRENCIA"></i>
+                <i class="fas fa-pencil-alt acao-btn-recorrente" title="Ações para esta ocorrência/série" data-mae-id="${evento.maeId}" data-ocorrencia-data="${evento.data}" data-action="ABRIR_MODAL_ACOES_RECORRENTE"></i>
+                <i class="fas fa-times-circle acao-btn-recorrente" title="Pular esta ocorrência" data-mae-id="${evento.maeId}" data-ocorrencia-data="${evento.data}" data-action="PULAR_OCORRENCIA"></i>
+            `;
+        } else if (evento.source === 'manual' || evento.source === 'recorrente_confirmada' || evento.transferenciaId) { // Adicionado 'transferenciaId' aqui
+            const syncActive = isSynced ? 'sync-active' : '';
+            const syncTitle = isSynced ? "Desativar sincronia com Finanças da Casa" : "Ativar sincronia com Finanças da Casa";
+            controles = `<i class="fas fa-sync-alt acao-btn toggle-sync ${syncActive}" title="${syncTitle}" data-id="${evento.id}" data-type="moeda"></i>
+                         <i class="fas fa-edit acao-btn edit" title="Editar Movimentação" data-id="${evento.id}" data-type="moeda"></i>
+                         <i class="fas fa-trash acao-btn delete" title="Excluir Movimentação" data-id="${evento.id}" data-type="moeda"></i>`;
+        } else {
+            controles = `<i class="fas fa-lock" title="Transação automática."></i>`;
         }
-    }
 
-    if (compras.length === 0 && vendas.length === 0) {
-        alert('Nenhuma compra ou venda simulada para visualizar. Preencha a coluna "Qtd" de pelo menos um ativo.');
-        return;
-    }
+        corpoTabela += `<tr class="${linhaClasse.trim()}">
+            <td>${new Date(evento.data + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+            <td>${iconeSync}${evento.descricao}</td>
+            <td class="numero ${valorClasse}">${valorFmt}</td>
+            <td class="numero coluna-saldo ${saldoClasse}">${formatarMoedaEstrangeira(saldoCorrente, ativo.moeda)}</td>
+            <td class="controles-col">${controles}</td>
+        </tr>`;
+    });
 
-    const container = document.getElementById('modal-resumo-negociacao-conteudo');
-    let conteudoHtml = '';
+    const transacoesHoje = todosOsEventos.filter(e =>
+        e.tipo === 'moeda' &&
+        String(e.idAlvo) === String(ativo.id) &&
+        e.source !== 'recorrente_futura' &&
+        e.data <= hojeStr &&
+        e.data >= ativo.dataSaldoInicial
+    );
+    const saldoFinalHoje = transacoesHoje.reduce((soma, t) => soma + arredondarMoeda(t.valor), ativo.saldoInicial);
+    const temMovimentoHoje = todosOsEventos.some(t => t.tipo === 'moeda' && String(t.idAlvo) === String(ativo.id) && t.source !== 'recorrente_futura' && t.data === hojeStr);
 
-    if (vendas.length > 0) {
-        vendas.sort((a, b) => b.total - a.total);
-        conteudoHtml += `<h4>Vendas Simuladas</h4><table><thead>
-            <tr><th>Ativo</th><th class="numero">Quantidade</th><th class="numero">Preço de Venda</th><th class="numero">Valor Total</th></tr>
-        </thead><tbody>`;
-        vendas.forEach(venda => {
-            conteudoHtml += `
-                <tr>
-                    <td>${venda.ticker}</td>
-                    <td class="numero">${venda.quantidade}</td>
-                    <td class="numero">${formatarMoeda(venda.preco)}</td>
-                    <td class="numero">${formatarMoeda(venda.total)}</td>
-                </tr>`;
-        });
-        conteudoHtml += '</tbody></table>';
-    }
-
-    if (compras.length > 0) {
-        compras.sort((a, b) => b.total - a.total);
-        conteudoHtml += `<h4 style="margin-top: 20px;">Compras Simuladas</h4><table><thead>
-            <tr><th>Ativo</th><th class="numero">Quantidade</th><th class="numero">Preço de Compra</th><th class="numero">Valor Total</th></tr>
-        </thead><tbody>`;
-        compras.forEach(compra => {
-            conteudoHtml += `
-                <tr>
-                    <td>${compra.ticker}</td>
-                    <td class="numero">${compra.quantidade}</td>
-                    <td class="numero">${formatarMoeda(compra.preco)}</td>
-                    <td class="numero">${formatarMoeda(compra.total)}</td>
-                </tr>`;
-        });
-        conteudoHtml += '</tbody></table>';
-    }
-
-    const totalCompra = compras.reduce((soma, item) => soma + item.total, 0);
-    const totalVenda = vendas.reduce((soma, item) => soma + item.total, 0);
-    const valorLiquido = totalVenda - totalCompra;
-    const classeLiquido = valorLiquido >= 0 ? 'valor-positivo' : 'valor-negativo';
-
-    const rendimentoAtualFiis = parseDecimal(document.getElementById('total-rend-atual-fiis').textContent);
-    const rendimentoPosCompraFiis = parseDecimal(document.getElementById('total-rend-pos-compra-fiis').textContent);
-    const rendimentoAtualAcoes = parseDecimal(document.getElementById('total-rend-atual-acoes').textContent);
-    const rendimentoPosCompraAcoes = parseDecimal(document.getElementById('total-rend-pos-compra-acoes').textContent);
-    
-    const rendimentoTotalAtual = rendimentoAtualFiis + rendimentoAtualAcoes;
-    const rendimentoTotalPosCompra = rendimentoPosCompraFiis + rendimentoPosCompraAcoes;
-    const acrescimoRendimento = rendimentoTotalPosCompra - rendimentoTotalAtual;
-
-    const percentualAcrescimo = (rendimentoTotalAtual > 0) ? (acrescimoRendimento / rendimentoTotalAtual) : (acrescimoRendimento > 0 ? Infinity : 0);
-    const sinal = acrescimoRendimento > 0.005 ? '+' : '';
-    
-    const totaisHtml = `
-        <div class="resumo-negociacao-totais">
-            <div>
-                <span>Total das Vendas:</span>
-                <span>${formatarMoeda(totalVenda)}</span>
-            </div>
-            <div>
-                <span>Total das Compras:</span>
-                <span>${formatarMoeda(totalCompra)}</span>
-            </div>
-            <div class="total-compra">
-                <strong>Líquido da Operação:</strong>
-                <strong class="${classeLiquido}">${formatarMoeda(valorLiquido)}</strong>
-            </div>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 10px 0;">
-            <div>
-                <span>Rendimento Mensal (Antes):</span>
-                <span>${formatarMoeda(rendimentoTotalAtual)}</span>
-            </div>
-            <div>
-                <span>Rendimento Mensal (Depois):</span>
-                <span>${formatarMoeda(rendimentoTotalPosCompra)}</span>
-            </div>
-            <div>
-                <strong>Acréscimo no Rendimento:</strong>
-                <div class="valor-agrupado-direita">
-                    <strong>${formatarMoeda(acrescimoRendimento)}</strong>
-                    <small>${sinal}${formatarPercentual(percentualAcrescimo)}</small>
-                </div>
-            </div>
-        </div>
-    `;
-
-    container.innerHTML = conteudoHtml + totaisHtml;
-    abrirModal('modal-resumo-negociacao');
+    return { html: corpoTabela, saldoFinal: saldoFinalHoje, temMovimentoHoje };
 }
-
 function renderizarTelaNegociar() {
-    document.getElementById('negociar-aporte-valor').value = dadosSimulacaoNegociar.aporteTotal ? formatarDecimalParaInput(parseDecimal(dadosSimulacaoNegociar.aporteTotal)) : '';
+    // 1. Configura o Input de Aporte
+    const inputAporte = document.getElementById('negociar-aporte-valor');
+    if (inputAporte) {
+        inputAporte.value = dadosSimulacaoNegociar.aporteTotal ? formatarDecimalParaInput(parseDecimal(dadosSimulacaoNegociar.aporteTotal)) : '';
+    }
 
+    // 2. Carrega Dados
     const posicoesAtuais = gerarPosicaoDetalhada();
     const dadosBalanceamento = gerarDadosBalanceamento('todos');
-    
     const projecaoProventos = calcularProjecaoProventosNegociacao();
 
     const getTickersToDisplay = (tipoSimulacao) => {
         const tickers = new Set();
         const tipoAtivoCorreto = tipoSimulacao === 'acoes' ? 'Ação' : 'FII'; 
 
-        // 1. Adiciona ativos da carteira atual (em posição)
         todosOsAtivos.forEach(a => {
             const tipoAtivo = a.tipo === 'Ação' ? 'acoes' : 'fiis';
             if (tipoAtivo === tipoSimulacao && posicoesAtuais[a.ticker] && posicoesAtuais[a.ticker].quantidade > 0) {
@@ -4901,7 +3736,6 @@ function renderizarTelaNegociar() {
             }
         });
 
-        // 2. Adiciona ativos da simulação salva
         if (dadosSimulacaoNegociar[tipoSimulacao]) {
             Object.keys(dadosSimulacaoNegociar[tipoSimulacao]).forEach(ticker => {
                 if (dadosSimulacaoNegociar[tipoSimulacao][ticker].qtd !== 0) {
@@ -4910,7 +3744,6 @@ function renderizarTelaNegociar() {
             });
         }
 
-        // 3. Adiciona ativos do plano de alocação
         Object.keys(dadosAlocacao.ativos).forEach(ticker => {
             const ativoInfo = todosOsAtivos.find(a => a.ticker === ticker);
             if (ativoInfo && ativoInfo.tipo === tipoAtivoCorreto) {
@@ -4921,94 +3754,109 @@ function renderizarTelaNegociar() {
         return Array.from(tickers).sort();
     };
 
-    // --- SEÇÃO DE FIIs ---
+    // --- RENDERIZAÇÃO: FIIs ---
     const tbodyFiis = document.getElementById('negociar-fiis-tbody');
     const tfootFiis = document.getElementById('negociar-fiis-tfoot');
     tbodyFiis.innerHTML = '';
     const fiisParaExibir = getTickersToDisplay('fiis');
 
     if (fiisParaExibir.length === 0) {
-        tbodyFiis.innerHTML = '<tr><td colspan="16" style="text-align: center;">Nenhum Fundo Imobiliário em carteira ou no plano de alocação.</td></tr>';
+        tbodyFiis.innerHTML = '<tr><td colspan="16" class="text-center text-muted" style="padding: 20px;">Nenhum FII encontrado.</td></tr>';
         tfootFiis.style.display = 'none';
     } else {
         tfootFiis.style.display = 'table-footer-group';
         let htmlFiis = '';
+        
         fiisParaExibir.forEach(ticker => {
             const fii = todosOsAtivos.find(a => a.ticker === ticker);
             if (!fii) return;
 
-            const posicao = posicoesAtuais[ticker], dadosMercado = dadosDeMercado.cotacoes[ticker] || {}, dadosSimulacao = dadosSimulacaoNegociar.fiis[ticker] || {}, dadosDoAtivoNoBalanceamento = dadosBalanceamento.categorias['FIIs']?.ativos.find(a => a.ticker === ticker);
-            const qtdAtual = posicao ? posicao.quantidade : 0, precoMedio = posicao ? posicao.precoMedio : 0, precoAtual = dadosMercado.valor || 0;
+            const posicao = posicoesAtuais[ticker];
+            const dadosMercado = dadosDeMercado.cotacoes[ticker] || {};
+            const dadosSimulacao = dadosSimulacaoNegociar.fiis[ticker] || {};
+            const dadosDoAtivoNoBalanceamento = dadosBalanceamento.categorias['FIIs']?.ativos.find(a => a.ticker === ticker);
+            
+            const qtdAtual = posicao ? posicao.quantidade : 0;
+            const precoMedio = posicao ? posicao.precoMedio : 0;
+            const precoAtual = dadosMercado.valor || 0;
             const vpa = dadosMercado.vpa || 0;
             const ultimoProvento = getUltimoProvento(ticker);
+            
             const metaQtd = dadosDoAtivoNoBalanceamento ? Math.round(dadosDoAtivoNoBalanceamento.ideal.quantidade) : 0;
             const ajusteQtd = dadosDoAtivoNoBalanceamento ? Math.round(dadosDoAtivoNoBalanceamento.ajuste.quantidade) : 0;
-            let ajusteQtdHtml = '0';
-            if (ajusteQtd > 0) ajusteQtdHtml = `<span class="valor-positivo">+${ajusteQtd}</span>`;
-            else if (ajusteQtd < 0) ajusteQtdHtml = `<span class="valor-negativo">${ajusteQtd}</span>`;
-            const qtdSimulada = dadosSimulacao.qtd || 0, precoSimulado = dadosSimulacao.preco || precoAtual;
+            
+            let ajusteQtdHtml = '<span class="text-muted">-</span>';
+            if (ajusteQtd > 0) ajusteQtdHtml = `<span class="badge badge-success" style="font-size: 0.9em;">+${ajusteQtd}</span>`;
+            else if (ajusteQtd < 0) ajusteQtdHtml = `<span class="badge badge-danger" style="font-size: 0.9em;">${ajusteQtd}</span>`;
+
+            const qtdSimulada = dadosSimulacao.qtd || 0;
+            const precoSimulado = dadosSimulacao.preco || precoAtual;
             const rendimentoAtual = ultimoProvento * qtdAtual;
             const yieldProjetado = (precoAtual > 0 && ultimoProvento > 0) ? (ultimoProvento * 12) / precoAtual : 0;
-            const diff = precoAtual - precoMedio;
-            const diffPercent = precoMedio > 0 ? (diff / precoMedio) : 0;
-            let classePreco = '', desempenhoHtml = '-';
-            if (diffPercent > 0.0001) { classePreco = 'preco-maior'; desempenhoHtml = `<span class="preco-maior">↑ ${formatarPercentual(diffPercent)}</span>`; } 
-            else if (diffPercent < -0.0001) { classePreco = 'preco-menor'; desempenhoHtml = `<span class="preco-menor">↓ ${formatarPercentual(Math.abs(diffPercent))}</span>`; }
-            
-            const hoje = new Date().toISOString().split('T')[0];
-            let proximaDataComHtml = '';
-            const proximoProvento = todosOsProventos
-                .filter(p => p.ticker === ticker && p.dataCom >= hoje)
-                .sort((a, b) => new Date(a.dataCom) - new Date(a.dataCom))[0];
 
-            if (proximoProvento) {
-                const dataFmt = new Date(proximoProvento.dataCom + 'T12:00:00').toLocaleDateString('pt-BR');
-                proximaDataComHtml = `<small class="next-ex-date"><i class="fas fa-calendar-day"></i> Próx. Data-Com: ${dataFmt}</small>`;
-            }
+            const diffPercent = precoMedio > 0 ? ((precoAtual - precoMedio) / precoMedio) : 0;
+            let classeVariacao = diffPercent >= 0 ? 'text-success' : 'text-danger';
+            let iconeVariacao = diffPercent >= 0 ? '▲' : '▼';
+            let variacaoHtml = `<span class="${classeVariacao}" style="font-size: 0.9em;">${iconeVariacao} ${formatarPercentual(Math.abs(diffPercent))}</span>`;
 
-            htmlFiis += `<tr data-ticker="${ticker}" data-qtd-atual="${qtdAtual}" data-ultimo-provento="${ultimoProvento}">
-                <td><strong>${ticker}</strong>${proximaDataComHtml}</td>
+            htmlFiis += `
+            <tr data-ticker="${ticker}" data-qtd-atual="${qtdAtual}" data-ultimo-provento="${ultimoProvento}" style="vertical-align: middle;">
+                <td style="font-weight: 600;">${ticker}</td>
                 <td class="numero">${formatarPrecoMedio(precoMedio)}</td>
-                <td class="numero ${classePreco}">${formatarMoeda(precoAtual)}</td>
-                <td class="percentual col-variacao">${desempenhoHtml}</td>
-                <td class="numero">${vpa > 0 ? formatarDecimal(precoMedio / vpa) : 'N/A'}</td>
-                <td class="numero">${vpa > 0 ? formatarDecimal(precoAtual / vpa) : 'N/A'}</td>
-                <td class="percentual">${yieldProjetado > 0 ? formatarPercentual(yieldProjetado) : 'N/A'}</td>
+                <td class="numero" style="font-weight: bold;">${formatarMoeda(precoAtual)}</td>
+                <td class="text-center">${variacaoHtml}</td>
+                <td class="numero">${vpa > 0 ? formatarDecimal(precoMedio / vpa) : '-'}</td>
+                <td class="numero">${vpa > 0 ? formatarDecimal(precoAtual / vpa) : '-'}</td>
+                <td class="percentual text-info">${yieldProjetado > 0 ? formatarPercentual(yieldProjetado) : '-'}</td>
                 <td class="numero col-qtd">${Math.round(qtdAtual)}</td>
-                <td class="numero col-qtd">${metaQtd}</td>
-                <td class="numero col-qtd">${ajusteQtdHtml}</td>
-                <td class="numero col-qtd"><input type="number" class="input-in-table negociar-input-qtd" placeholder="0" value="${qtdSimulada || ''}"></td>
-                <td class="numero"><input type="text" class="input-in-table negociar-input-preco" value="${formatarDecimalParaInput(precoSimulado)}"></td>
-                <td class="numero" data-field="totalCompraSimulado">R$ 0,00</td>
-                <td class="numero col-qtd" data-field="posicaoFinalSimulada">${Math.round(qtdAtual)}</td>
+                <td class="numero col-qtd text-muted">${metaQtd}</td>
+                <td class="numero col-qtd text-center">${ajusteQtdHtml}</td>
+                <td class="p-1">
+                    <input type="number" class="form-control form-control-sm text-center input-in-table negociar-input-qtd" placeholder="0" value="${qtdSimulada || ''}" style="min-width: 60px;">
+                </td>
+                <td class="p-1">
+                    <input type="text" class="form-control form-control-sm text-right input-in-table negociar-input-preco" value="${formatarDecimalParaInput(precoSimulado)}" style="min-width: 80px;">
+                </td>
+                <td class="numero font-weight-bold" data-field="totalCompraSimulado" style="color: #2c3e50;">R$ 0,00</td>
+                <td class="numero col-qtd" data-field="posicaoFinalSimulada" style="font-weight: bold;">${Math.round(qtdAtual)}</td>
                 <td class="numero" data-field="rendimentoAtual">${formatarMoeda(rendimentoAtual)}</td>
-                <td class="numero" data-field="rendimentoPosCompra">${formatarMoeda(rendimentoAtual)}</td>
+                <td class="numero text-success" data-field="rendimentoPosCompra">${formatarMoeda(rendimentoAtual)}</td>
             </tr>`;
         });
         tbodyFiis.innerHTML = htmlFiis;
     }
-    // Nota: O valor inicial aqui é apenas um placeholder, será atualizado pelo evento 'input' no final
     tfootFiis.querySelector('[id^="total-rend-atual-"]').textContent = formatarMoeda(projecaoProventos.fiis);
-    
+
+    // --- RENDERIZAÇÃO: AÇÕES ---
     const tbodyAcoes = document.getElementById('negociar-acoes-tbody');
     const tfootAcoes = document.getElementById('negociar-acoes-tfoot');
     tbodyAcoes.innerHTML = '';
     const acoesParaExibir = getTickersToDisplay('acoes');
 
     if (acoesParaExibir.length === 0) {
-        tbodyAcoes.innerHTML = '<tr><td colspan="19" style="text-align: center;">Nenhuma Ação em carteira ou no plano de alocação.</td></tr>';
+        tbodyAcoes.innerHTML = '<tr><td colspan="19" class="text-center text-muted" style="padding: 20px;">Nenhuma Ação encontrada.</td></tr>';
         tfootAcoes.style.display = 'none';
     } else {
         tfootAcoes.style.display = 'table-footer-group';
         let htmlAcoes = '';
+        
         acoesParaExibir.forEach(ticker => {
             const acao = todosOsAtivos.find(a => a.ticker === ticker);
             if (!acao) return;
 
-            const posicao = posicoesAtuais[ticker], dadosMercado = dadosDeMercado.cotacoes[ticker] || {}, dadosSimulacao = dadosSimulacaoNegociar.acoes[ticker] || {}, dadosDoAtivoNoBalanceamento = dadosBalanceamento.categorias['Ações']?.ativos.find(a => a.ticker === ticker);
-            const qtdAtual = posicao ? posicao.quantidade : 0, precoMedio = posicao ? posicao.precoMedio : 0, precoAtual = dadosMercado.valor || 0, lpa = dadosMercado.lpa_acao || 0;
+            const posicao = posicoesAtuais[ticker];
+            const dadosMercado = dadosDeMercado.cotacoes[ticker] || {};
+            const dadosSimulacao = dadosSimulacaoNegociar.acoes[ticker] || {};
+            const dadosDoAtivoNoBalanceamento = dadosBalanceamento.categorias['Ações']?.ativos.find(a => a.ticker === ticker);
+            
+            const qtdAtual = posicao ? posicao.quantidade : 0;
+            const precoMedio = posicao ? posicao.precoMedio : 0;
+            const precoAtual = dadosMercado.valor || 0;
+            const lpa = dadosMercado.lpa_acao || 0;
             const vpa = dadosMercado.vpa || 0;
-            const min52 = dadosMercado.min52 || 0, max52 = dadosMercado.max52 || 0;
+            const min52 = dadosMercado.min52 || 0;
+            const max52 = dadosMercado.max52 || 0;
+            
             const projecaoAnualUnitaria = calcularProjecaoAnualUnitaria(ticker, { limiteAnos: 5 });
             const yieldProjetado = (precoAtual > 0 && projecaoAnualUnitaria > 0) ? projecaoAnualUnitaria / precoAtual : 0;
             const metaYieldBazin = acao.metaYieldBazin || 0.06;
@@ -5016,63 +3864,62 @@ function renderizarTelaNegociar() {
             const precoTetoGraham = calcularPrecoTetoGraham(lpa, vpa);
             const pl = lpa > 0 ? (precoAtual / lpa) : 0;
             const payout = (lpa > 0 && projecaoAnualUnitaria > 0) ? (projecaoAnualUnitaria / lpa) : 0;
+
             const metaQtd = dadosDoAtivoNoBalanceamento ? Math.round(dadosDoAtivoNoBalanceamento.ideal.quantidade) : 0;
             const ajusteQtd = dadosDoAtivoNoBalanceamento ? Math.round(dadosDoAtivoNoBalanceamento.ajuste.quantidade) : 0;
-            let ajusteQtdHtml = '0';
-            if (ajusteQtd > 0) ajusteQtdHtml = `<span class="valor-positivo">+${ajusteQtd}</span>`;
-            else if (ajusteQtd < 0) ajusteQtdHtml = `<span class="valor-negativo">${ajusteQtd}</span>`;
-            const qtdSimulada = dadosSimulacao.qtd || 0, precoSimulado = dadosSimulacao.preco || precoAtual;
-            const rendimentoAtual = (projecaoAnualUnitaria * qtdAtual) / 12;
-            const diff = precoAtual - precoMedio;
-            const diffPercent = precoMedio > 0 ? (diff / precoMedio) : 0;
-            let classePreco = '', desempenhoHtml = '-';
-            if (diffPercent > 0.0001) { classePreco = 'preco-maior'; desempenhoHtml = `<span class="preco-maior">↑ ${formatarPercentual(diffPercent)}</span>`; } 
-            else if (diffPercent < -0.0001) { classePreco = 'preco-menor'; desempenhoHtml = `<span class="preco-menor">↓ ${formatarPercentual(Math.abs(diffPercent))}</span>`; }
             
-            const hoje = new Date().toISOString().split('T')[0];
-            let proximaDataComHtml = '';
-            const proximoProvento = todosOsProventos
-                .filter(p => p.ticker === ticker && p.dataCom >= hoje)
-                .sort((a, b) => new Date(a.dataCom) - new Date(a.dataCom))[0];
+            let ajusteQtdHtml = '<span class="text-muted">-</span>';
+            if (ajusteQtd > 0) ajusteQtdHtml = `<span class="badge badge-success" style="font-size: 0.9em;">+${ajusteQtd}</span>`;
+            else if (ajusteQtd < 0) ajusteQtdHtml = `<span class="badge badge-danger" style="font-size: 0.9em;">${ajusteQtd}</span>`;
 
-            if (proximoProvento) {
-                const dataFmt = new Date(proximoProvento.dataCom + 'T12:00:00').toLocaleDateString('pt-BR');
-                proximaDataComHtml = `<small class="next-ex-date"><i class="fas fa-calendar-day"></i> Próx. Data-Com: ${dataFmt}</small>`;
-            }
+            const qtdSimulada = dadosSimulacao.qtd || 0;
+            const precoSimulado = dadosSimulacao.preco || precoAtual;
+            const rendimentoAtual = (projecaoAnualUnitaria * qtdAtual) / 12;
+            
+            const diffPercent = precoMedio > 0 ? ((precoAtual - precoMedio) / precoMedio) : 0;
+            let classeVariacao = diffPercent >= 0 ? 'text-success' : 'text-danger';
+            let iconeVariacao = diffPercent >= 0 ? '▲' : '▼';
+            let variacaoHtml = `<span class="${classeVariacao}" style="font-size: 0.9em;">${iconeVariacao} ${formatarPercentual(Math.abs(diffPercent))}</span>`;
 
-            htmlAcoes += `<tr data-ticker="${ticker}" data-qtd-atual="${qtdAtual}" data-dividendo-anual="${projecaoAnualUnitaria}" data-meta-yield-bazin="${metaYieldBazin}">
-                <td><strong>${ticker}</strong>${proximaDataComHtml}</td>
+            htmlAcoes += `
+            <tr data-ticker="${ticker}" data-qtd-atual="${qtdAtual}" data-dividendo-anual="${projecaoAnualUnitaria}" data-meta-yield-bazin="${metaYieldBazin}" style="vertical-align: middle;">
+                <td style="font-weight: 600;">${ticker}</td>
                 <td class="numero">${formatarPrecoMedio(precoMedio)}</td>
-                <td class="numero ${classePreco}">${formatarMoeda(precoAtual)}</td>
-                <td class="numero">${desempenhoHtml}</td>
-                <td class="numero col-price-range-vertical"><span>${formatarMoeda(min52)}</span><span>${formatarMoeda(max52)}</span></td>
-                <td class="numero">
-                    <div class="bazin-cell-container">
-                        <span data-field="precoTetoBazin">${formatarMoeda(precoTetoBazin)}</span>
-                        <span class="meta-yield-display" title="Meta de Yield (do Cadastro de Ativos)">${formatarPercentual(metaYieldBazin)}</span>
+                <td class="numero" style="font-weight: bold;">${formatarMoeda(precoAtual)}</td>
+                <td class="text-center">${variacaoHtml}</td>
+                <td class="numero" style="font-size: 0.85em; color: #7f8c8d;">${formatarMoeda(min52)} - ${formatarMoeda(max52)}</td>
+                <td class="numero" style="background-color: #fcfbfd;">
+                    <div class="bazin-cell-container" style="display: flex; flex-direction: column; align-items: flex-end;">
+                        <span data-field="precoTetoBazin" style="font-weight: bold; color: #6f42c1;">${formatarMoeda(precoTetoBazin)}</span>
+                        <span class="meta-yield-display" title="Meta Yield Cadastrada" style="font-size: 0.7em; color: #aaa;">Meta: ${formatarPercentual(metaYieldBazin)}</span>
                     </div>
                 </td>
                 <td class="numero">${formatarMoeda(precoTetoGraham)}</td>
-                <td class="numero">${lpa > 0 ? formatarDecimal(pl) : 'N/A'}</td>
-                <td class="numero">${lpa > 0 ? formatarPercentual(payout) : 'N/A'}</td>
-                <td class="percentual">${yieldProjetado > 0 ? formatarPercentual(yieldProjetado) : 'N/A'}</td>
+                <td class="numero">${lpa > 0 ? formatarDecimal(pl) : '-'}</td>
+                <td class="numero">${lpa > 0 ? formatarPercentual(payout) : '-'}</td>
+                <td class="percentual text-info">${yieldProjetado > 0 ? formatarPercentual(yieldProjetado) : '-'}</td>
                 <td class="numero col-qtd">${Math.round(qtdAtual)}</td>
-                <td class="numero col-qtd">${metaQtd}</td>
-                <td class="numero col-qtd">${ajusteQtdHtml}</td>
-                <td class="numero col-qtd"><input type="number" class="input-in-table negociar-input-qtd" placeholder="0" value="${qtdSimulada || ''}"></td>
-                <td class="numero"><input type="text" class="input-in-table negociar-input-preco" value="${formatarDecimalParaInput(precoSimulado)}"></td>
-                <td class="numero" data-field="totalCompraSimulado">R$ 0,00</td>
-                <td class="numero col-qtd" data-field="posicaoFinalSimulada">${Math.round(qtdAtual)}</td>
+                <td class="numero col-qtd text-muted">${metaQtd}</td>
+                <td class="numero col-qtd text-center">${ajusteQtdHtml}</td>
+                <td class="p-1">
+                    <input type="number" class="form-control form-control-sm text-center input-in-table negociar-input-qtd" placeholder="0" value="${qtdSimulada || ''}" style="min-width: 60px;">
+                </td>
+                <td class="p-1">
+                    <input type="text" class="form-control form-control-sm text-right input-in-table negociar-input-preco" value="${formatarDecimalParaInput(precoSimulado)}" style="min-width: 80px;">
+                </td>
+                <td class="numero font-weight-bold" data-field="totalCompraSimulado" style="color: #2c3e50;">R$ 0,00</td>
+                <td class="numero col-qtd" data-field="posicaoFinalSimulada" style="font-weight: bold;">${Math.round(qtdAtual)}</td>
                 <td class="numero" data-field="rendimentoAtual">${formatarMoeda(rendimentoAtual)}</td>
-                <td class="numero" data-field="rendimentoPosCompra">${formatarMoeda(rendimentoAtual)}</td>
+                <td class="numero text-success" data-field="rendimentoPosCompra">${formatarMoeda(rendimentoAtual)}</td>
             </tr>`;
         });
         tbodyAcoes.innerHTML = htmlAcoes;
     }
-    // Nota: O valor inicial aqui é apenas um placeholder, será atualizado pelo evento 'input' no final
     tfootAcoes.querySelector('[id^="total-rend-atual-"]').textContent = formatarMoeda(projecaoProventos.acoes);
 
+    // --- LOGICA DE INTERAÇÃO E CÁLCULO ---
     const containerTela = document.getElementById('tela-negociar');
+    
     if (containerTela._listener) {
         containerTela.removeEventListener('input', containerTela._listener);
         containerTela.removeEventListener('change', containerTela._listener);
@@ -5090,43 +3937,47 @@ function renderizarTelaNegociar() {
         let qtdSimulada = parseInt(tr.querySelector('.negociar-input-qtd').value, 10) || 0;
         const precoSimulado = parseDecimal(tr.querySelector('.negociar-input-preco').value) || 0;
     
+        // Validação de Saldo
         if (qtdSimulada > 0) {
-            const aporteTotal = parseDecimal(document.getElementById('negociar-aporte-valor').value);
+            const inputAporteEl = document.getElementById('negociar-aporte-valor');
+            const aporteTotal = inputAporteEl ? parseDecimal(inputAporteEl.value) : 0;
             let custoOutrasOperacoes = 0;
-    
             ['fiis', 'acoes'].forEach(tipo => {
-                for (const t in dadosSimulacaoNegociar[tipo]) {
-                    if (t !== ticker) { 
-                        const sim = dadosSimulacaoNegociar[tipo][t];
-                        custoOutrasOperacoes += (sim.qtd || 0) * (sim.preco || 0);
+                if(dadosSimulacaoNegociar[tipo]) {
+                    for (const t in dadosSimulacaoNegociar[tipo]) {
+                        if (t !== ticker) { 
+                            const sim = dadosSimulacaoNegociar[tipo][t];
+                            custoOutrasOperacoes += (sim.qtd || 0) * (sim.preco || 0);
+                        }
                     }
                 }
             });
-            
             const saldoDisponivelAntesDestaCompra = aporteTotal - custoOutrasOperacoes;
-    
             if (precoSimulado > 0 && (qtdSimulada * precoSimulado > saldoDisponivelAntesDestaCompra + 0.01)) {
                 const maxQtdPossivel = Math.floor(saldoDisponivelAntesDestaCompra / precoSimulado);
-                alert(`Saldo de aporte insuficiente. Com o saldo restante de ${formatarMoeda(saldoDisponivelAntesDestaCompra)}, você pode comprar no máximo ${maxQtdPossivel} unidade(s) deste ativo.`);
                 qtdSimulada = maxQtdPossivel; 
                 tr.querySelector('.negociar-input-qtd').value = qtdSimulada > 0 ? qtdSimulada : ''; 
             }
         }
     
+        if (!dadosSimulacaoNegociar[tipoAtivo]) dadosSimulacaoNegociar[tipoAtivo] = {};
         if (!dadosSimulacaoNegociar[tipoAtivo][ticker]) dadosSimulacaoNegociar[tipoAtivo][ticker] = {};
         dadosSimulacaoNegociar[tipoAtivo][ticker].qtd = qtdSimulada;
         dadosSimulacaoNegociar[tipoAtivo][ticker].preco = precoSimulado;
     
+        // --- FEEDBACK VISUAL CORRIGIDO ---
+        // Aqui usamos as classes do CSS que acabei de fornecer
         tr.classList.remove('simulacao-compra', 'simulacao-venda');
         if (qtdSimulada > 0) {
-            tr.classList.add('simulacao-compra');
+            tr.classList.add('simulacao-compra'); // Verde
         } else if (qtdSimulada < 0) {
-            tr.classList.add('simulacao-venda');
+            tr.classList.add('simulacao-venda'); // Vermelho
         }
     
         const qtdAtual = parseFloat(tr.dataset.qtdAtual);
         tr.querySelector('[data-field="totalCompraSimulado"]').textContent = formatarMoeda(qtdSimulada * precoSimulado);
         tr.querySelector('[data-field="posicaoFinalSimulada"]').textContent = Math.round(qtdAtual + qtdSimulada);
+        
         let totalRendPosCompraGrupo = 0;
         const tbody = tr.closest('tbody');
         
@@ -5134,45 +3985,33 @@ function renderizarTelaNegociar() {
             const ultimoProvento = parseFloat(tr.dataset.ultimoProvento);
             tr.querySelector('[data-field="rendimentoPosCompra"]').textContent = formatarMoeda(ultimoProvento * (qtdAtual + qtdSimulada));
         } else {
-            const metaYieldBazin = parseFloat(tr.dataset.metaYieldBazin);
-            delete dadosSimulacaoNegociar.acoes[ticker].bazinYield;
             const dividendoAnual = parseFloat(tr.dataset.dividendoAnual);
             tr.querySelector('[data-field="rendimentoPosCompra"]').textContent = formatarMoeda((dividendoAnual * (qtdAtual + qtdSimulada)) / 12);
-            tr.querySelector('[data-field="precoTetoBazin"]').textContent = formatarMoeda(calcularPrecoTetoBazin(dividendoAnual, metaYieldBazin));
         }        
         
-        // --- CORREÇÃO PRINCIPAL DE ARREDONDAMENTO ---
-        // Recalcula o Total Atual somando os valores JÁ ARREDONDADOS que estão na tabela,
-        // para garantir consistência com o Total Pós-Compra.
         let totalRendAtualGrupoRecalculado = 0;
-        
         tbody.querySelectorAll('tr').forEach(row => {
             const rendAtualEl = row.querySelector('[data-field="rendimentoAtual"]');
             if (rendAtualEl) totalRendAtualGrupoRecalculado += parseDecimal(rendAtualEl.textContent);
-            
             const rendPosCompraEl = row.querySelector('[data-field="rendimentoPosCompra"]');
             if (rendPosCompraEl) totalRendPosCompraGrupo += parseDecimal(rendPosCompraEl.textContent);
         });
 
         const tfoot = tbody.nextElementSibling;
-        
-        // Atualiza o label do total atual com a soma visual (para ser consistente)
         tfoot.querySelector(`[id^="total-rend-atual-"]`).textContent = formatarMoeda(totalRendAtualGrupoRecalculado);
         
         const diffRaw = totalRendPosCompraGrupo - totalRendAtualGrupoRecalculado;
-        // Aplica tolerância extra para garantir zero limpo
         const diff = Math.abs(diffRaw) < 0.005 ? 0 : diffRaw;
         
         tfoot.querySelector(`[id^="total-rend-pos-compra-"]`).textContent = formatarMoeda(totalRendPosCompraGrupo);
         const diffEl = tfoot.querySelector(`[id^="diff-rend-"]`);
-        diffEl.textContent = formatarMoeda(diff);
-        diffEl.className = `numero ${diff > 0.005 ? 'valor-positivo' : diff < -0.005 ? 'valor-negativo' : ''}`;
+        diffEl.textContent = diff > 0.005 ? "+" + formatarMoeda(diff) : formatarMoeda(diff);
+        diffEl.className = `numero ${diff > 0.005 ? 'text-success' : diff < -0.005 ? 'text-danger' : 'text-muted'}`;
         
         atualizarResumoAporte();
-        if (e.type === 'change') { 
-            salvarDadosSimulacaoNegociar(); 
-        }
+        if (e.type === 'change') salvarDadosSimulacaoNegociar(); 
     };
+
     containerTela._listener = recalcularAoInteragir;
     containerTela.addEventListener('input', containerTela._listener);
     containerTela.addEventListener('change', containerTela._listener);
@@ -5186,1379 +4025,7 @@ function renderizarTelaNegociar() {
     containerTela._keydownListener = handleEnterKey;
     containerTela.addEventListener('keydown', containerTela._keydownListener);
     
-    // Dispara o evento inicial para calcular os totais corretos já na carga
     containerTela.querySelectorAll('tbody tr .input-in-table').forEach(input => {
         input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
     });
 }
-function atualizarIconeDeAlertasGlobal(posicoesRV_opcional, dadosBrutos_opcional) {
-    // Garante que os dados existam
-    const hoje = new Date().toISOString().split('T')[0];
-    const posicoesRV = posicoesRV_opcional || gerarPosicaoDetalhada(hoje);
-    const dadosBrutos = dadosBrutos_opcional || gerarDadosBalanceamento('todos');
-    
-    // Chama o motor de cálculo
-    const alertas = verificarAlertasDashboard(posicoesRV, dadosBrutos);
-    
-    // Conta apenas as oportunidades REAIS (Lucro > 10% + Critério do Modo)
-    const count = alertas.oportunidades.length;
-    
-    // Atualiza o ícone e o contador na interface
-    const icon = document.getElementById('dashboard-alert-icon');
-    const badge = document.getElementById('dashboard-alert-badge');
-    
-    if (icon && badge) {
-        if (count > 0) {
-            icon.classList.add('alerta-ativo');
-            badge.textContent = count;
-            badge.style.display = 'flex';
-            // Tooltip dinâmico
-            icon.parentElement.setAttribute('title', `${count} Oportunidade(s) de Realização`);
-        } else {
-            icon.classList.remove('alerta-ativo');
-            badge.style.display = 'none';
-            icon.parentElement.setAttribute('title', 'Status da Carteira');
-        }
-    }
-}
-
-async function aplicarPlanoDeAcaoParaSimulacao() {
-    const btn = document.getElementById('btn-levar-plano-para-negociar');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
-    btn.disabled = true;
-    isNavigating = true; 
-
-    try {
-        const aporteDinheiroNovo = parseDecimal(document.getElementById('balanceamento-aporte-valor').value || '0');
-
-        const elementoAporteRF = document.querySelector('#plano-de-acao-container .ticker-aporte');
-        let valorAporteRF = 0;
-        if (elementoAporteRF) {
-            const containerItem = elementoAporteRF.closest('.rebalanceamento-item');
-            if ((elementoAporteRF.textContent.includes('Renda Fixa') || elementoAporteRF.textContent.includes('Fixed Income')) && !containerItem.classList.contains('item-pausado')) {
-                const elementoValor = containerItem.querySelector('strong.valor-positivo');
-                if (elementoValor) {
-                    valorAporteRF = parseDecimal(elementoValor.textContent);
-                }
-            }
-        }
-        
-        const aporteLiquidoParaRV = aporteDinheiroNovo - valorAporteRF;
-
-        dadosSimulacaoNegociar = { fiis: {}, acoes: {}, aporteTotal: '' };
-        
-        planoDeAcaoAtual.vendas.forEach(item => {
-            if (estadoSelecaoVendas[item.ticker] !== false) {
-                const ativoInfo = todosOsAtivos.find(a => a.ticker === item.ticker);
-                if (!ativoInfo) return;
-                const tipo = ativoInfo.tipo === 'Ação' ? 'acoes' : 'fiis';
-                dadosSimulacaoNegociar[tipo][item.ticker] = {
-                    qtd: -item.qtd, 
-                    preco: item.preco
-                };
-            }
-        });
-
-        planoDeAcaoAtual.compras.forEach(item => {
-            const ativoInfo = todosOsAtivos.find(a => a.ticker === item.ticker);
-            if (!ativoInfo) return;
-            
-            if (ativoInfo.tipo === 'Ação' || ativoInfo.tipo === 'FII' || ativoInfo.tipo === 'ETF') {
-                const tipo = ativoInfo.tipo === 'Ação' ? 'acoes' : 'fiis';
-
-                if (!dadosSimulacaoNegociar[tipo][item.ticker]) {
-                    const dadosParaSalvar = {
-                        qtd: item.qtd,
-                        preco: item.preco
-                    };
-                    if (tipo === 'acoes') {
-                        dadosParaSalvar.bazinYield = ativoInfo.metaYieldBazin || 0.06;
-                    }
-                    dadosSimulacaoNegociar[tipo][item.ticker] = dadosParaSalvar;
-                }
-            }
-        });
-
-        dadosSimulacaoNegociar.aporteTotal = formatarDecimalParaInput(aporteLiquidoParaRV);
-
-        await salvarDadosSimulacaoNegociar();
-
-        mostrarTela('negociar');
-        renderizarTelaNegociar();
-        
-        alert('Action plan loaded in the simulation screen!');
-
-    } catch (error) {
-        console.error("Erro ao levar plano para simulação:", error);
-        alert("An error occurred while loading the plan. Try again.");
-    } finally {
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-        isNavigating = false; 
-    }
-}
-
-
-
-function renderizarCalendarioGeral() {
-    const container = document.getElementById('container-calendario-geral');
-    const filtroCorretora = document.getElementById('calendario-geral-filtro-corretora')?.value || 'consolidado';
-    
-    const calendarioData = {}; 
-
-    const initCalendarioData = (ano, mes, tipo) => {
-        if (!calendarioData[ano]) calendarioData[ano] = Array.from({ length: 12 }, () => ({}));
-        if (!calendarioData[ano][mes][tipo]) calendarioData[ano][mes][tipo] = [];
-    };
-
-    todosOsProventos.forEach(p => {
-        if (!p.dataPagamento) return;
-        let valorConsiderado = (filtroCorretora === 'consolidado') ? p.valorTotalRecebido : (p.posicaoPorCorretora[filtroCorretora]?.valorRecebido || 0);
-        if (valorConsiderado === 0) return;
-
-        const data = new Date(p.dataPagamento + 'T12:00:00');
-        const ano = data.getUTCFullYear();
-        const mes = data.getUTCMonth();
-        const ativoInfo = todosOsAtivos.find(a => a.ticker === p.ticker);
-        const tipoAtivo = ativoInfo ? ativoInfo.tipo : 'Outro';
-
-        initCalendarioData(ano, mes, tipoAtivo);
-        calendarioData[ano][mes][tipoAtivo].push({
-            ticker: p.ticker, dataCom: p.dataCom, dataPagamento: p.dataPagamento,
-            valorIndividual: p.valorIndividual, valor: valorConsiderado
-        });
-    });
-
-    const rendimentosRFPorAtivo = {};
-    todosOsRendimentosRFNaoRealizados.forEach(r => {
-        const ativoRF = todosOsAtivosRF.find(a => a.id === r.ativoId);
-        if (!ativoRF || (filtroCorretora !== 'consolidado' && ativoRF.instituicao !== filtroCorretora)) return;
-        const chaveMes = r.data.substring(0, 7);
-        if (!rendimentosRFPorAtivo[r.ativoId]) rendimentosRFPorAtivo[r.ativoId] = {};
-        if (!rendimentosRFPorAtivo[r.ativoId][chaveMes]) rendimentosRFPorAtivo[r.ativoId][chaveMes] = [];
-        rendimentosRFPorAtivo[r.ativoId][chaveMes].push(r.rendimento);
-    });
-
-    for (const ativoId in rendimentosRFPorAtivo) {
-        let ultimoRendimento = 0;
-        Object.keys(rendimentosRFPorAtivo[ativoId]).sort().forEach(chaveMes => {
-            const [ano, mes] = chaveMes.split('-').map(Number);
-            const rendimentosDoMes = rendimentosRFPorAtivo[ativoId][chaveMes];
-            const rendimentoFinalMes = rendimentosDoMes[rendimentosDoMes.length - 1];
-            const rendimentoIncremental = rendimentoFinalMes - ultimoRendimento;
-            
-            if (rendimentoIncremental > 0) {
-                 const ativoRF = todosOsAtivosRF.find(a => String(a.id) === ativoId);
-                 initCalendarioData(ano, mes - 1, 'Renda Fixa');
-                 calendarioData[ano][mes - 1]['Renda Fixa'].push({
-                     descricao: ativoRF.descricao, valor: rendimentoIncremental
-                 });
-            }
-            ultimoRendimento = rendimentoFinalMes;
-        });
-    }
-    
-    const anosOrdenados = Object.keys(calendarioData).sort((a, b) => b - a);
-    if (anosOrdenados.length === 0) {
-        container.innerHTML = `<p>No yield found for the selected filter.</p>`;
-        return;
-    }
-    
-    let htmlFinal = '';
-    const meses = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
-    anosOrdenados.forEach(ano => {
-        htmlFinal += `<div class="calendario-ano-container"><h3>${ano}</h3><table>`;
-        htmlFinal += `<thead><tr><th>Asset Class</th>`;
-        meses.forEach(mes => htmlFinal += `<th class="header-numero">${mes}</th>`);
-        htmlFinal += `<th class="header-numero">Year Total</th></tr></thead><tbody>`;
-
-        const totaisMensais = Array(12).fill(0);
-
-        const tiposDeAtivoComDados = new Set();
-        if (calendarioData[ano]) {
-            for (let i = 0; i < 12; i++) {
-                if (calendarioData[ano][i]) {
-                    Object.keys(calendarioData[ano][i]).forEach(tipo => {
-                        if (calendarioData[ano][i][tipo].length > 0) {
-                            tiposDeAtivoComDados.add(tipo);
-                        }
-                    });
-                }
-            }
-        }
-        const tiposOrdenados = Array.from(tiposDeAtivoComDados).sort();
-
-        tiposOrdenados.forEach(tipo => {
-            let tipoFmt = tipo;
-            if (tipo === 'Ação') tipoFmt = 'Shares';
-            if (tipo === 'FII') tipoFmt = 'REITs';
-            if (tipo === 'Renda Fixa') tipoFmt = 'Fixed Income';
-
-            htmlFinal += `<tr><td><strong>${tipoFmt}</strong></td>`;
-            let totalTipoNoAno = 0;
-            for (let i = 0; i < 12; i++) {
-                const dadosDoMes = calendarioData[ano]?.[i]?.[tipo] || [];
-                const valorMes = dadosDoMes.reduce((soma, item) => soma + item.valor, 0);
-
-                const classeClicavel = valorMes !== 0 ? 'valor-clicavel' : '';
-                const dataAttributes = valorMes !== 0 ? `data-ano="${ano}" data-mes="${i}" data-tipo="${tipo}"` : '';
-                
-                htmlFinal += `<td class="numero ${classeClicavel}" ${dataAttributes}>${valorMes !== 0 ? formatarMoeda(valorMes) : '-'}</td>`;
-                totalTipoNoAno += valorMes;
-                totaisMensais[i] += valorMes;
-            }
-            htmlFinal += `<td class="numero"><strong>${formatarMoeda(totalTipoNoAno)}</strong></td></tr>`;
-        });
-
-        htmlFinal += `<tr class="total-row"><td style="text-align: right;"><strong>TOTALS</strong></td>`;
-        let totalGeralAno = 0;
-        for (let i = 0; i < 12; i++) {
-            htmlFinal += `<td class="numero">${formatarMoeda(totaisMensais[i])}</td>`;
-            totalGeralAno += totaisMensais[i];
-        }
-        htmlFinal += `<td class="numero"><strong>${formatarMoeda(totalGeralAno)}</strong></td></tr>`;
-        htmlFinal += '</tbody></table></div>';
-    });
-
-    container.innerHTML = htmlFinal;
-
-    container.addEventListener('click', (e) => {
-        const targetCell = e.target.closest('.valor-clicavel');
-        if (targetCell) {
-            const { ano, mes, tipo } = targetCell.dataset;
-            abrirModalDetalhesRendimentoMensal(ano, mes, tipo, calendarioData);
-        }
-    });
-}
-
-function renderizarTabelaProventosAnuais(dados) {
-    const container = document.getElementById('container-proventos-anuais');
-    const footnotesContainer = document.getElementById('footnotes-proventos-anuais');
-    let hasProjected = false;
-    let hasFuture = false;
-
-    let tableHtml = `<table class="dashboard-table">
-        <thead>
-            <tr>
-                <th>Year</th>
-                <th class="numero">Shares</th>
-                <th class="numero">REITs</th>
-                <th class="numero">ETFs</th>
-                <th class="numero">Total VI</th>
-                <th class="numero">Fixed Income</th>
-                <th class="numero">Grand Total</th>
-                <th class="numero">Daily Avg</th>
-                <th class="numero">Monthly Avg</th>
-            </tr>
-        </thead>
-        <tbody>
-    `;
-
-    const anosOrdenados = Object.keys(dados).sort((a, b) => b - a);
-
-    anosOrdenados.forEach(ano => {
-        const d = dados[ano];
-        let classesMedia = '';
-        let footnoteMarker = '';
-
-        if (d.isProjected) {
-            classesMedia = 'valor-projetado';
-            footnoteMarker = '*';
-            hasProjected = true;
-        }
-        if (d.isFuture) {
-            classesMedia = 'valor-projetado';
-            footnoteMarker = '**';
-            hasFuture = true;
-        }
-        
-        tableHtml += `
-            <tr>
-                <td><strong>${ano}</strong></td>
-                <td class="numero">${formatarMoeda(d['Ação'])}</td>
-                <td class="numero">${formatarMoeda(d['FII'])}</td>
-                <td class="numero">${formatarMoeda(d['ETF'])}</td>
-                <td class="numero"><strong>${formatarMoeda(d['Total RV'])}</strong></td>
-                <td class="numero">${formatarMoeda(d['Renda Fixa'])}</td>
-                <td class="numero"><strong>${formatarMoeda(d['Total Geral'])}</strong></td>
-                <td class="numero ${classesMedia}">${formatarMoeda(d['MediaDiaria'])}${footnoteMarker}</td>
-                <td class="numero ${classesMedia}">${formatarMoeda(d['MediaMensal'])}${footnoteMarker}</td>
-            </tr>
-        `;
-    });
-
-    tableHtml += `</tbody></table>`;
-    container.innerHTML = tableHtml;
-
-    let footnotesHtml = '';
-    if (hasProjected) {
-        footnotesHtml += `<p><strong>*</strong> Projected values: Average calculated based on yields received to date and projected for the entire year.</p>`;
-    }
-    if (hasFuture) {
-        footnotesHtml += `<p><strong>**</strong> Values for future years: Calculated based on already announced income with a future pay date.</p>`;
-    }
-    footnotesContainer.innerHTML = footnotesHtml;
-}
-
-function abrirModalProventosAnuais() {
-    const modal = document.getElementById('modal-proventos-anuais');
-    document.getElementById('container-proventos-anuais').innerHTML = '<h4>Calculating...</h4>';
-    modal.style.display = 'block';
-
-    setTimeout(() => {
-        const dados = gerarDadosProventosAnuais();
-        renderizarTabelaProventosAnuais(dados);
-    }, 50);
-}
-
-function atualizarStatusBotaoIR() {
-    const anoSelecionado = document.getElementById('ir-filtro-ano').value;
-    const anoAtual = new Date().getFullYear();
-    const btnImprimir = document.getElementById('btn-imprimir-ir');
-    
-    if (parseInt(anoSelecionado, 10) === anoAtual) {
-        btnImprimir.classList.add('icone-titulo-desabilitado');
-        btnImprimir.title = "Cannot generate the report for the current year.";
-    } else {
-        btnImprimir.classList.remove('icone-titulo-desabilitado');
-        btnImprimir.title = "Print Tax Report";
-    }
-}
-
-
-function abrirModalDetalhesIR(ano, mes) {
-    const dadosIR = calcularImpostoRendaAnual(ano);
-    const meses = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    const chaveMes = `${ano}-${String(mes + 1).padStart(2, '0')}`;
-    
-    if (!dadosIR[chaveMes]) {
-        alert('Data not found for this month.');
-        return;
-    }
-
-    const dadosGeral = dadosIR[chaveMes]['geral_rv'];
-    const dadosFiis = dadosIR[chaveMes]['fiis'];
-    const dadosDT = dadosIR[chaveMes]['daytrade'];
-
-    const titulo = `Tax Details - ${meses[mes]} ${ano}`;
-    document.getElementById('modal-detalhes-ir-titulo').textContent = titulo;
-    const container = document.getElementById('modal-detalhes-ir-conteudo');
-
-    const vendasOpsGeral = dadosGeral.operacoes.filter(op => op.tipo === 'venda');
-    const vendasOutrasAcoes = vendasOpsGeral.filter(op => op.tipoAcao !== 'Unit' && todosOsAtivos.find(a => a.ticker === op.ativo)?.tipo === 'Ação');
-    const totalVendasOutrasAcoesBruto = vendasOutrasAcoes.reduce((sum, op) => sum + op.valor, 0);
-
-    const resultadoIsento = (totalVendasOutrasAcoesBruto <= configuracoesFiscais.limiteIsencaoAcoes) 
-        ? vendasOutrasAcoes.reduce((sum, op) => op.resultado > 0 ? sum + op.resultado : sum, 0)
-        : 0;
-
-    const resultadoTributavelAcoes = (totalVendasOutrasAcoesBruto > configuracoesFiscais.limiteIsencaoAcoes)
-        ? vendasOutrasAcoes.filter(op => op.resultado > 0).reduce((sum, op) => sum + op.resultado, 0)
-        : 0;
-        
-    const resultadoTributavelUnits = vendasOpsGeral.filter(op => op.tipoAcao === 'Unit' && op.resultado > 0).reduce((sum, op) => sum + op.resultado, 0);
-    const resultadoTributavelETFs = vendasOpsGeral.filter(op => todosOsAtivos.find(a => a.ticker === op.ativo)?.tipo === 'ETF' && op.resultado > 0).reduce((sum, op) => sum + op.resultado, 0);
-    const resultadoMesTributavel = resultadoTributavelAcoes + resultadoTributavelUnits + resultadoTributavelETFs;
-
-    let irrfDoMes = 0;
-    todasAsNotas.filter(n => n.data.startsWith(chaveMes)).forEach(n => {
-        irrfDoMes += (n.irrf || 0);
-    });
-
-    const impostoTotalGeral = dadosGeral.impostoDevido + dadosFiis.impostoDevido + dadosDT.impostoDevido;
-    const impostoFinal = Math.max(0, impostoTotalGeral - irrfDoMes);
-
-    let html = `
-        <div class="ir-detalhes-container">
-            <div class="ir-detalhes-secao">
-                <h4>General (Shares, ETFs, etc.) - SWING TRADE</h4>
-                <table class="ir-detalhes-tabela">
-                    <tbody>
-                        <tr><td>Month Result (Gross)</td><td class="numero">${formatarMoeda(dadosGeral.resultadoMes)}</td></tr>
-                        <tr><td>&nbsp;&nbsp;&nbsp;↳ Exempt Result (Shares ON/PN)</td><td class="numero">${formatarMoeda(resultadoIsento)}</td></tr>
-                        <tr><td>&nbsp;&nbsp;&nbsp;↳ Taxable Profit (Shares ON/PN)</td><td class="numero">${formatarMoeda(resultadoTributavelAcoes)}</td></tr>
-                        <tr><td>&nbsp;&nbsp;&nbsp;↳ Taxable Profit (Units)</td><td class="numero">${formatarMoeda(resultadoTributavelUnits)}</td></tr>
-                        <tr><td>&nbsp;&nbsp;&nbsp;↳ Taxable Profit (ETFs)</td><td class="numero">${formatarMoeda(resultadoTributavelETFs)}</td></tr>
-                        <tr><td>(-) Loss to Offset</td><td class="numero valor-negativo">${formatarMoeda(dadosGeral.prejuizoAnterior)}</td></tr>
-                        <tr><td>(+/-) Manual Adjustment</td><td class="numero">${formatarMoeda(dadosGeral.ajusteManual)}</td></tr>
-                        <tr class="ir-detalhes-linha-subtotal"><td>(=) Calculation Base / Loss to Offset</td><td class="numero">${formatarMoeda(dadosGeral.baseDeCalculo > 0 ? dadosGeral.baseDeCalculo : (dadosGeral.prejuizoAnterior + dadosGeral.resultadoMes + dadosGeral.ajusteManual))}</td></tr>
-                        <tr><td>Tax Due (${formatarPercentual(configuracoesFiscais.aliquotaAcoes)})</td><td class="numero">${formatarMoeda(dadosGeral.impostoDevido)}</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="ir-detalhes-secao">
-                <h4>REITs</h4>
-                <table class="ir-detalhes-tabela">
-                    <tbody>
-                        <tr><td>Calculation Base / Loss to Offset</td><td class="numero">${formatarMoeda(dadosFiis.baseDeCalculo > 0 ? dadosFiis.baseDeCalculo : (dadosFiis.prejuizoAnterior + dadosFiis.resultadoMes + dadosFiis.ajusteManual))}</td></tr>
-                        <tr><td>Tax Due (${formatarPercentual(configuracoesFiscais.aliquotaFiisDt)})</td><td class="numero">${formatarMoeda(dadosFiis.impostoDevido)}</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="ir-detalhes-secao">
-                <h4>Day Trade Operations</h4>
-                <table class="ir-detalhes-tabela">
-                     <tbody>
-                        <tr><td>Calculation Base / Loss to Offset</td><td class="numero">${formatarMoeda(dadosDT.baseDeCalculo > 0 ? dadosDT.baseDeCalculo : (dadosDT.prejuizoAnterior + dadosDT.resultadoMes + dadosDT.ajusteManual))}</td></tr>
-                        <tr><td>Tax Due (${formatarPercentual(configuracoesFiscais.aliquotaFiisDt)})</td><td class="numero">${formatarMoeda(dadosDT.impostoDevido)}</td></tr>
-                    </tbody>
-                </table>
-            </div>
-            
-            <div class="ir-detalhes-secao">
-                <h4>Final Summary</h4>
-                 <table class="ir-detalhes-tabela">
-                    <tbody>
-                        <tr><td>Total Monthly Tax</td><td class="numero">${formatarMoeda(impostoTotalGeral)}</td></tr>
-                        <tr><td>(-) WHT to Deduct</td><td class="numero valor-negativo">${formatarMoeda(irrfDoMes)}</td></tr>
-                        <tr class="ir-detalhes-linha-total"><td>(=) Tax Due (DARF)</td><td class="numero">${formatarMoeda(impostoFinal)}</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    `;
-    
-    container.innerHTML = html;
-    abrirModal('modal-detalhes-ir-mes');
-}
-
-function renderizarCalculadoraIR() {
-    const anoSelecionado = document.getElementById('ir-filtro-ano').value;
-    if (!anoSelecionado) return;
-
-    document.getElementById('ir-limite-isencao-texto').textContent = formatarMoeda(configuracoesFiscais.limiteIsencaoAcoes);
-
-    const dadosIR = calcularImpostoRendaAnual(anoSelecionado);
-    let totalAnual = 0;
-
-    const meses = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    
-    const gerarTabelaHtml = (dados, tipo) => {
-        let tableHtml = `<table><thead><tr>
-            <th>Month</th>
-            <th class="right-aligned-header">Total Sales</th>
-            <th class="right-aligned-header">Loss to Offset</th>
-            <th class="right-aligned-header">Month Result</th>
-            <th class="right-aligned-header">Loss to Offset (post-result)</th>
-            <th class="right-aligned-header">Calculation Base</th>
-            <th class="right-aligned-header">Tax Due</th>
-        </tr></thead><tbody>`;
-
-        for (let i = 0; i < 12; i++) {
-            const mesStr = String(i + 1).padStart(2, '0');
-            const chaveMes = `${anoSelecionado}-${mesStr}`;
-            const dadosMes = dados[chaveMes][tipo];
-            
-            const resultadoAjustado = dadosMes.resultadoMes + dadosMes.ajusteManual;
-            
-            let prejuizoPosResultado;
-
-            if (tipo === 'geral_rv') {
-                const vendasOps = dadosMes.operacoes.filter(op => op.tipo === 'venda');
-                const vendasOutrasAcoes = vendasOps.filter(op => op.tipoAcao !== 'Unit' && todosOsAtivos.find(a => a.ticker === op.ativo)?.tipo === 'Ação');
-                const totalVendasOutrasAcoesBruto = vendasOutrasAcoes.reduce((sum, op) => sum + op.valor, 0);
-
-                const resultadoUnits = vendasOps.filter(op => op.tipoAcao === 'Unit').reduce((sum, op) => sum + op.resultado, 0);
-                const resultadoETFs = vendasOps.filter(op => todosOsAtivos.find(a => a.ticker === op.ativo)?.tipo === 'ETF').reduce((sum, op) => sum + op.resultado, 0);
-                const resultadoOutrasAcoes = vendasOutrasAcoes.reduce((sum, op) => sum + op.resultado, 0);
-
-                let resultadoTributavelDoMes = 0;
-                if (resultadoUnits > 0) resultadoTributavelDoMes += resultadoUnits;
-                if (resultadoETFs > 0) resultadoTributavelDoMes += resultadoETFs;
-
-                if (totalVendasOutrasAcoesBruto > configuracoesFiscais.limiteIsencaoAcoes && resultadoOutrasAcoes > 0) {
-                    resultadoTributavelDoMes += resultadoOutrasAcoes;
-                }
-                resultadoTributavelDoMes += dadosMes.ajusteManual;
-                
-                prejuizoPosResultado = Math.min(0, dadosMes.prejuizoAnterior + resultadoTributavelDoMes);
-
-            } else {
-                prejuizoPosResultado = Math.min(0, dadosMes.prejuizoAnterior + resultadoAjustado);
-            }
-
-            let prejuizoCellHtml;
-            const prejuizoDoMes = Math.abs(dadosMes.prejuizoAnterior);
-            
-            if (i === 0) {
-                const chaveAjustePrejuizo = `${anoSelecionado}-00_${tipo}`;
-                prejuizoCellHtml = `<td class="numero editable-prejudice-cell" 
-                                        contenteditable="true"
-                                        data-chave-ajuste-prejuizo="${chaveAjustePrejuizo}"
-                                        data-prejuizo-calculado="${prejuizoDoMes}"
-                                        title="Accumulated loss from previous years. Click to set an initial value for this year.">${formatarMoeda(prejuizoDoMes)}</td>`;
-            } else {
-                prejuizoCellHtml = `<td class="numero">${formatarMoeda(prejuizoDoMes)}</td>`;
-            }
-
-            const classeAjustado = dadosMes.ajusteManual !== 0 ? 'adjusted' : '';
-            const tooltipAjuste = dadosMes.ajusteManual !== 0 ? `title="Original Value: ${formatarMoeda(dadosMes.resultadoMes)} | Adjustment: ${formatarMoeda(dadosMes.ajusteManual)}"` : '';
-            
-            tableHtml += `
-                <tr class="linha-mes-ir" data-mes="${i}" data-tipo="${tipo}">
-                    <td>${meses[i]}</td>
-                    <td class="numero">${formatarMoeda(dadosMes.totalVendas)}</td>
-                    ${prejuizoCellHtml}
-                    <td class="numero editable-result ${classeAjustado} ${resultadoAjustado >= 0 ? 'lucro' : 'prejuizo'}" 
-                        contenteditable="true" 
-                        data-chave-ajuste="${chaveMes}_${tipo}"
-                        data-resultado-calculado="${dadosMes.resultadoMes}"
-                        ${tooltipAjuste}>${formatarMoeda(resultadoAjustado)}</td>
-                    <td class="numero ${prejuizoPosResultado < 0 ? 'prejuizo' : ''}">${formatarMoeda(Math.abs(prejuizoPosResultado))}</td>
-                    <td class="numero">${formatarMoeda(dadosMes.baseDeCalculo)}</td>
-                    <td class="numero ${dadosMes.impostoDevido > 0 ? 'imposto-clicavel' : ''}" data-ano="${anoSelecionado}" data-mes="${i}">${formatarMoeda(dadosMes.impostoDevido)}</td>
-                </tr>
-            `;
-        }
-        tableHtml += '</tbody></table>';
-        return tableHtml;
-    };
-    
-    const containerFiis = document.getElementById('ir-tabela-fiis');
-    const containerGeralRV = document.getElementById('ir-tabela-geral-rv');
-    const containerDaytrade = document.getElementById('ir-tabela-daytrade');
-
-    containerFiis.innerHTML = gerarTabelaHtml(dadosIR, 'fiis');
-    containerGeralRV.innerHTML = gerarTabelaHtml(dadosIR, 'geral_rv');
-    containerDaytrade.innerHTML = gerarTabelaHtml(dadosIR, 'daytrade');
-
-    ['fiis', 'geral_rv', 'daytrade'].forEach(tipo => {
-        for (let i = 0; i < 12; i++) {
-            const mesStr = String(i + 1).padStart(2, '0');
-            const chaveMes = `${anoSelecionado}-${mesStr}`;
-            if (dadosIR[chaveMes] && dadosIR[chaveMes][tipo]) {
-                totalAnual += dadosIR[chaveMes][tipo].impostoDevido;
-            }
-        }
-    });
-    
-    document.getElementById('ir-total-anual').textContent = formatarMoeda(totalAnual);
-    
-    const attachCellListeners = (containerElement) => {
-        if (!containerElement) return;
-        containerElement.addEventListener('blur', (e) => {
-            const target = e.target;
-            if (target.classList.contains('editable-result') || target.classList.contains('editable-prejudice-cell')) {
-                salvarAjusteIR(target);
-            }
-        }, true);
-
-        containerElement.addEventListener('keydown', (e) => {
-            const target = e.target;
-            if (e.key === 'Enter' && (target.classList.contains('editable-result') || target.classList.contains('editable-prejudice-cell'))) {
-                e.preventDefault();
-                target.blur();
-            }
-        });
-
-        containerElement.addEventListener('click', (e) => {
-            const target = e.target;
-            if (target.classList.contains('imposto-clicavel')) {
-                abrirModalDetalhesIR(target.dataset.ano, parseInt(target.closest('tr').dataset.mes));
-                return;
-            }
-            
-            if (target.closest('.editable-result, .editable-prejudice-cell')) {
-                return;
-            }
-
-            const linhaClicada = e.target.closest('.linha-mes-ir');
-            if (!linhaClicada) return;
-
-            const proximoElemento = linhaClicada.nextElementSibling;
-            
-            if (proximoElemento && proximoElemento.classList.contains('ir-details-row')) {
-                proximoElemento.remove();
-                return;
-            }
-
-            document.querySelectorAll('.ir-details-row').forEach(row => row.remove());
-            
-            const ano = document.getElementById('ir-filtro-ano').value;
-            const mes = parseInt(linhaClicada.dataset.mes);
-            const tipo = linhaClicada.dataset.tipo;
-            const chaveMes = `${ano}-${String(mes + 1).padStart(2, '0')}`;
-            const operacoes = dadosIR[chaveMes][tipo].operacoes;
-            
-            if (operacoes.length === 0) return;
-
-            let detailsHtml = `<table class="ir-details-table"><thead><tr>
-                <th>Transaction</th><th>Asset</th><th>Date</th>
-                <th class="numero">Qty.</th><th class="numero">Net Value</th>
-                <th class="numero">Acquisition Cost</th><th class="numero">Result</th>
-            </tr></thead><tbody>`;
-            
-            operacoes.forEach(op => {
-                if(op.tipo === 'venda') {
-                     detailsHtml += `<tr>
-                        <td>Sale</td><td>${op.ativo}</td>
-                        <td>${new Date(op.data + 'T12:00:00').toLocaleDateString('en-GB')}</td>
-                        <td class="numero">${op.quantidade}</td>
-                        <td class="numero">${formatarMoeda(op.valorVendaLiquida)}</td>
-                        <td class="numero">${formatarMoeda(op.custoAquisicao)}</td>
-                        <td class="numero ${op.resultado >= 0 ? 'lucro' : 'prejuizo'}">${formatarMoeda(op.resultado)}</td>
-                    </tr>`;
-                } else {
-                     detailsHtml += `<tr style="background-color: #f0f9ff;">
-                        <td>Buy</td><td>${op.ativo}</td>
-                        <td>${new Date(op.data + 'T12:00:00').toLocaleDateString('en-GB')}</td>
-                        <td class="numero">${op.quantidade}</td>
-                        <td class="numero">${formatarMoeda(op.valorCompra)}</td>
-                        <td class="numero">${formatarMoeda(op.valorCompra)}</td>
-                        <td class="numero">-</td>
-                    </tr>`;
-                }
-            });
-
-            detailsHtml += `</tbody></table>`;
-            const newRow = document.createElement('tr');
-            newRow.className = 'ir-details-row';
-            newRow.innerHTML = `<td colspan="7">${detailsHtml}</td>`;
-            linhaClicada.parentNode.insertBefore(newRow, linhaClicada.nextElementSibling);
-        });
-    };
-
-    attachCellListeners(containerFiis);
-    attachCellListeners(containerGeralRV);
-    attachCellListeners(containerDaytrade);
-}
-
-function renderizarPosicoesZeradas() {
-    const container = document.getElementById('container-posicoes-zeradas');
-    const dados = gerarRelatorioPosicoesZeradas();
-    
-    if (dados.length === 0) {
-        container.innerHTML = "<p>No zeroed positions found in your history.</p>";
-        return;
-    }
-
-    let tableHtml = `<table><thead><tr>
-        <th>Asset</th>
-        <th>Position Start Date</th>
-        <th>Position End Date</th>
-    </tr></thead><tbody>`;
-
-    dados.sort((a,b) => new Date(b.dataEncerramento) - new Date(a.dataEncerramento)).forEach(item => {
-        tableHtml += `
-            <tr>
-                <td>${item.ticker}</td>
-                <td>${new Date(item.dataInicio + 'T12:00:00').toLocaleDateString('en-GB')}</td>
-                <td>${new Date(item.dataEncerramento + 'T12:00:00').toLocaleDateString('en-GB')}</td>
-            </tr>
-        `;
-    });
-
-    tableHtml += "</tbody></table>";
-    container.innerHTML = tableHtml;
-}
-
-function gerarHistoricoCompletoParaAtivo(ticker) {
-    const historico = [];
-    const pos = { quantidade: 0, precoMedio: 0, porCorretora: {} };
-    let eventos = [];
-
-    posicaoInicial.filter(p => p.ticker === ticker).forEach(p => eventos.push({ data: p.data, tipo: p.tipoRegistro, payload: p }));
-    todasAsNotas.forEach(n => {
-        n.operacoes.filter(op => op.ativo === ticker).forEach(op => {
-            eventos.push({ data: n.data, tipo: 'OPERACAO_NOTA', payload: { ...op, custosNota: n.custos, irrfNota: n.irrf, corretora: n.corretora, numeroNota: n.numero, totalOperacoesNota: n.operacoes.reduce((soma, op) => soma + op.valor, 0) } });
-        });
-    });
-    todosOsAjustes.forEach(a => {
-        if ((a.tipoAjuste === 'transferencia' && a.ativosTransferidos.some(at => at.ticker === ticker)) || (a.ticker === ticker)) {
-             eventos.push({ data: a.data, tipo: a.tipoAjuste, payload: a });
-        }
-    });
-
-    eventos.sort((a,b) => new Date(a.data) - new Date(b.data));
-
-    eventos.forEach(evento => {
-        let descricaoTransacao = '';
-        let precoUnitario = null;
-        const payload = evento.payload;
-
-        switch(evento.tipo) {
-            case 'SUMARIO_MANUAL': {
-                let qtdTotalSumario = 0;
-                payload.posicoesPorCorretora.forEach(pc => {
-                    pos.porCorretora[pc.corretora] = (pos.porCorretora[pc.corretora] || 0) + pc.quantidade;
-                    qtdTotalSumario += pc.quantidade;
-                });
-                pos.quantidade = qtdTotalSumario;
-                pos.precoMedio = payload.precoMedio;
-                descricaoTransacao = 'Initial Manual Position';
-                precoUnitario = payload.precoMedio;
-                break;
-            }
-            case 'TRANSACAO_HISTORICA': {
-                const corretora = payload.corretora;
-                const quantidade = payload.quantidade;
-                if (payload.transacao.toLowerCase() === 'compra') {
-                    pos.quantidade += quantidade;
-                    pos.porCorretora[corretora] = (pos.porCorretora[corretora] || 0) + quantidade;
-                    pos.precoMedio = payload.precoMedio;
-                    precoUnitario = null;
-                } else {
-                    pos.quantidade -= quantidade;
-                    pos.porCorretora[corretora] = (pos.porCorretora[corretora] || 0) - quantidade;
-                    pos.precoMedio = payload.precoMedio;
-                    precoUnitario = (payload.valorVenda && quantidade > 0) ? payload.valorVenda / quantidade : 0;
-                }
-                const txType = payload.transacao.toLowerCase() === 'compra' ? 'Buy' : 'Sell';
-                descricaoTransacao = `History: ${txType} of ${payload.quantidade}`;
-                break;
-            }
-            case 'OPERACAO_NOTA': {
-                const corretora = payload.corretora;
-                const qtdAnterior = pos.quantidade;
-                const pmAnterior = pos.precoMedio;
-                const qtdOperacao = payload.quantidade;
-                const custoRateado = payload.totalOperacoesNota > 0 ? (payload.valor / payload.totalOperacoesNota) * (payload.custosNota + payload.irrfNota) : 0;
-                
-                if (payload.tipo.toLowerCase() === 'compra') {
-                    const precoCompraComCustos = qtdOperacao > 0 ? (payload.valor + custoRateado) / qtdOperacao : 0;
-                    const novoTotalFinanceiro = (qtdAnterior * pmAnterior) + (qtdOperacao * precoCompraComCustos);
-                    pos.quantidade += qtdOperacao;
-                    pos.precoMedio = pos.quantidade > 0 ? novoTotalFinanceiro / pos.quantidade : 0;
-                    pos.porCorretora[corretora] = (pos.porCorretora[corretora] || 0) + qtdOperacao;
-                    precoUnitario = precoCompraComCustos;
-                } else {
-                    pos.quantidade -= qtdOperacao;
-                    pos.porCorretora[corretora] = (pos.porCorretora[corretora] || 0) - qtdOperacao;
-                    precoUnitario = qtdOperacao > 0 ? (payload.valor - custoRateado) / qtdOperacao : 0;
-                }
-                const txType = payload.tipo.toLowerCase() === 'compra' ? 'Buy' : 'Sell';
-                descricaoTransacao = `Note ${payload.numeroNota}: ${txType} of ${payload.quantidade}`;
-                break;
-            }
-            case 'evento_ativo': {
-                if (payload.tipoEvento === 'entrada') {
-                    const qtdAnterior = pos.quantidade;
-                    const pmAnterior = pos.precoMedio;
-                    let qtdEntradaTotal = 0;
-                    payload.detalhes.forEach(detalhe => {
-                        pos.porCorretora[detalhe.corretora] = (pos.porCorretora[detalhe.corretora] || 0) + detalhe.quantidade;
-                        qtdEntradaTotal += detalhe.quantidade;
-                    });
-                    const pmEntrada = payload.precoMedio;
-                    const novoTotalFinanceiro = (qtdAnterior * pmAnterior) + (qtdEntradaTotal * pmEntrada);
-                    pos.quantidade += qtdEntradaTotal;
-                    pos.precoMedio = pos.quantidade > 0 ? novoTotalFinanceiro / pos.quantidade : 0;
-                    precoUnitario = pmEntrada;
-                } else {
-                     payload.detalhes.forEach(detalhe => {
-                        pos.porCorretora[detalhe.corretora] -= detalhe.quantidade;
-                        pos.quantidade -= detalhe.quantidade;
-                    });
-                    precoUnitario = 0;
-                }
-                const evType = payload.tipoEvento === 'entrada' ? 'Inflow' : 'Outflow';
-                 descricaoTransacao = `Event: ${evType} of ${payload.detalhes.reduce((acc, d) => acc + d.quantidade, 0)}`;
-                if (pos.quantidade < 0.000001) pos.precoMedio = 0;
-                break;
-            }
-            case 'transferencia': {
-                const ativoT = payload.ativosTransferidos.find(at => at.ticker === ticker);
-                if (ativoT) {
-                    pos.porCorretora[payload.corretoraOrigem] = (pos.porCorretora[payload.corretoraOrigem] || 0) - ativoT.quantidade;
-                    pos.porCorretora[payload.corretoraDestino] = (pos.porCorretora[payload.corretoraDestino] || 0) + ativoT.quantidade;
-                    descricaoTransacao = `Transfer of ${ativoT.quantidade} units from ${payload.corretoraOrigem} to ${payload.corretoraDestino}`;
-                } else {
-                    descricaoTransacao = `Transfer from ${payload.corretoraOrigem} to ${payload.corretoraDestino}`;
-                }
-                precoUnitario = null;
-                break;
-            }
-            case 'ajuste_pm':
-                pos.precoMedio = payload.novoPrecoMedio;
-                descricaoTransacao = `Manual Avg Price Adj.`;
-                precoUnitario = null;
-                break;
-            case 'split_grupamento':
-                const de = payload.proporcaoDe;
-                const para = payload.proporcaoPara;
-                pos.quantidade = (pos.quantidade / de) * para;
-                pos.precoMedio = (pos.precoMedio / para) * de;
-                const evType = payload.tipoEvento === 'split' ? 'Split' : 'Consolidation';
-                descricaoTransacao = `Event: ${evType} ${de} to ${para}`;
-                precoUnitario = null;
-                break;
-        }
-        
-        const qtdPorCorretoraStr = Object.entries(pos.porCorretora)
-            .filter(([_, qtd]) => qtd > 0.0001)
-            .map(([nome, qtd]) => `${nome}: ${Math.round(qtd)}`)
-            .join('<br>');
-
-        const valorTotalInvestido = pos.quantidade * pos.precoMedio;
-
-        historico.push({
-            data: evento.data,
-            descricaoTransacao: descricaoTransacao,
-            precoUnitario: precoUnitario,
-            qtdPorCorretora: qtdPorCorretoraStr,
-            qtdConsolidada: pos.quantidade,
-            precoMedio: pos.precoMedio,
-            valorTotalInvestido: valorTotalInvestido
-        });
-    });
-
-    return historico;
-}
-
-function renderizarTelaHistoricoMovimentacao() {
-    mostrarTela('historicoMovimentacao');
-    const select = document.getElementById('select-ativo-historico');
-    const containerTabela = document.getElementById('container-tabela-movimentacoes');
-    containerTabela.innerHTML = '';
-    
-    const todosOsTickersHistorico = [...new Set(todosOsAtivos.map(a => a.ticker))];
-    const posicoesAtuais = gerarPosicaoDetalhada();
-    
-    const tickersComPosicao = new Set(Object.keys(posicoesAtuais).filter(t => posicoesAtuais[t].quantidade > 0.000001));
-    
-    let optionsHtml = '<option value="">Select an asset...</option>';
-    todosOsTickersHistorico.sort().forEach(ticker => {
-        if (!tickersComPosicao.has(ticker)) {
-            optionsHtml += `<option value="${ticker}" class="posicao-zerada">${ticker} (zeroed)</option>`;
-        } else {
-            optionsHtml += `<option value="${ticker}">${ticker}</option>`;
-        }
-    });
-
-    select.innerHTML = optionsHtml;
-}
-
-function renderizarTabelaHistoricoParaAtivo(ticker) {
-    const container = document.getElementById('container-tabela-movimentacoes');
-    if (!ticker) {
-        container.innerHTML = '';
-        return;
-    }
-    const historico = gerarHistoricoCompletoParaAtivo(ticker);
-
-    let tableHtml = `<h4>Transactions for ${ticker}</h4><table><thead><tr>
-        <th>Date</th>
-        <th>Transaction</th>
-        <th class="numero">Unit Price (R$)</th>
-        <th>Qty. by Broker</th>
-        <th class="numero">Consolidated Qty.</th>
-        <th class="numero">Avg Price</th>
-        <th class="numero">Invested Amount</th>
-    </tr></thead><tbody>`;
-
-    if (historico.length === 0) {
-        tableHtml += '<tr><td colspan="7" style="text-align: center;">No transactions found for this asset.</td></tr>';
-    } else {
-        historico.forEach(item => {
-            const dataFormatada = item.data ? new Date(item.data + 'T12:00:00').toLocaleDateString('en-GB') : 'Invalid Date';
-            
-            const precoUnitarioFmt = (item.precoUnitario !== null && item.precoUnitario > 0) ? formatarMoeda(item.precoUnitario) : 'N/A';
-            
-            tableHtml += `
-                <tr>
-                    <td>${dataFormatada}</td>
-                    <td>${item.descricaoTransacao}</td>
-                    <td class="numero">${precoUnitarioFmt}</td>
-                    <td>${item.qtdPorCorretora || 'N/A'}</td>
-                    <td class="numero">${Math.round(item.qtdConsolidada)}</td>
-                    <td class="numero">${formatarPrecoMedio(item.precoMedio)}</td>
-                    <td class="numero">${formatarMoeda(item.valorTotalInvestido)}</td>
-                </tr>`;
-        });
-    }
-
-    tableHtml += '</tbody></table>';
-    container.innerHTML = tableHtml;
-}
-
-
-
-
-
-function renderizarTelaHistoricoSnapshots() {
-    const container = document.getElementById('container-historico-snapshots');
-    
-    if (!historicoCarteira || historicoCarteira.length < 2) {
-        container.innerHTML = '<p>No snapshot saved. Save your first snapshot on the Dashboard screen.</p>';
-        return;
-    }
-
-    const moedaSelecionada = document.querySelector('input[name="snapshot-currency"]:checked')?.value || 'BRL';
-    const sufixoMoeda = moedaSelecionada === 'BRL' ? '' : ` (${moedaSelecionada})`;
-
-    const cotacoes = historicoCarteira.length > 0 ? historicoCarteira[historicoCarteira.length - 1].cotacoesMoedas : dadosMoedas.cotacoes;
-    const taxaCambio = moedaSelecionada === 'BRL' ? 1 : (cotacoes[moedaSelecionada] || 0);
-
-    const formatFunction = moedaSelecionada === 'BRL' ? formatarMoeda : (valor) => formatarMoedaEstrangeira(valor, moedaSelecionada);
-    const formatDecimalFunction = moedaSelecionada === 'BRL' ? (valor) => formatarDecimal(valor, 2) : (valor) => formatarDecimal(valor, 4);
-    const converterValor = (valor) => (taxaCambio > 0 ? (valor || 0) / taxaCambio : 0);
-
-    const dadosCalculados = [];
-    
-    const snapshotsValidos = historicoCarteira.filter(s => 
-        (s.patrimonioTotal && s.patrimonioTotal > 0) || (s.valorTotalInvestimentos && s.valorTotalInvestimentos > 0)
-    ).sort((a, b) => new Date(a.data) - new Date(b.data)); 
-
-    const maxValues = { patrimonioTotal: 0, valorTotalInvestimentos: 0, valorFiis: 0, valorAcoesOutros: 0, valorTotalContas: 0, valorTotalMoedas: 0, proventosProjetadosMensal: 0, ibov: 0, ifix: 0 };
-    
-    const historicoConvertidoComYield = [];
-    let anterior = null;
-    
-    snapshotsValidos.forEach((snapshot) => {
-        const proventosProjetadosMensalBRL = calcularProjecaoHistoricaParaSnapshot(snapshot);
-        const valorFiisBRL = snapshot.detalhesCarteira?.valorPorClasse?.['FIIs'] || 0;
-        const valorAcoesOutrosBRL = (snapshot.detalhesCarteira?.valorPorClasse?.['Ações'] || 0) + (snapshot.detalhesCarteira?.valorPorClasse?.['ETF'] || 0);
-        const valorTotalRVBRL = valorFiisBRL + valorAcoesOutrosBRL;
-        
-        const yieldProjetado = (valorTotalRVBRL > 0) ? (proventosProjetadosMensalBRL * 12) / valorTotalRVBRL : 0;
-
-        const valoresBRL = {
-            patrimonioTotal: snapshot.patrimonioTotal,
-            valorTotalInvestimentos: snapshot.valorTotalInvestimentos,
-            valorFiis: valorFiisBRL,
-            valorAcoesOutros: valorAcoesOutrosBRL,
-            valorTotalContas: snapshot.valorTotalContas,
-            valorTotalMoedas: snapshot.valorTotalMoedas,
-            proventosProjetadosMensal: proventosProjetadosMensalBRL,
-            ibov: snapshot.ibov,
-            ifix: snapshot.ifix
-        };
-
-        const valoresConvertidos = {};
-        const variacoes = {};
-        
-        for (const key in valoresBRL) {
-            valoresConvertidos[key] = converterValor(valoresBRL[key]);
-            
-            if (valoresConvertidos[key] > maxValues[key]) {
-                maxValues[key] = valoresConvertidos[key];
-            }
-
-            if (anterior) {
-                const diff = valoresConvertidos[key] - anterior.valoresConvertidos[key];
-                const percent = anterior.valoresConvertidos[key] !== 0 ? diff / anterior.valoresConvertidos[key] : 0;
-                variacoes[key] = percent;
-            }
-        }
-        
-        historicoConvertidoComYield.push({ 
-            data: snapshot.data, 
-            valoresConvertidos, 
-            yieldProjetado, 
-            variacoes 
-        });
-        
-        anterior = { valoresConvertidos };
-    });
-
-    dadosCalculados.push(...historicoConvertidoComYield.reverse());
-
-
-    let tableHtml = `<table>
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th class="numero">Total Net Worth${sufixoMoeda}</th>
-                <th class="numero">Total Invested${sufixoMoeda}</th>
-                <th class="numero">REITs${sufixoMoeda}</th>
-                <th class="numero">Shares/Others${sufixoMoeda}</th>
-                <th class="numero">Account Balance${sufixoMoeda}</th>
-                <th class="numero">Currency Balance${sufixoMoeda}</th>
-                <th class="numero">Projected Income${sufixoMoeda}</th>
-                <th class="numero">IBOV</th>
-                <th class="numero">IFIX</th>
-                <th class="controles-col">Actions</th>
-            </tr>
-        </thead>
-        <tbody>`;
-
-    dadosCalculados.forEach((item, index) => {
-        const dataFormatada = new Date(item.data + 'T12:00:00').toLocaleDateString('en-GB');
-        
-        const getCellHtml = (key, isCurrency = true) => {
-            const valor = item.valoresConvertidos[key];
-            const isMax = Math.abs(valor - maxValues[key]) < 0.005 && valor > 0;
-            const classeValor = isMax ? 'snapshot-max-value' : '';
-            
-            let valorFmt, diffHtml = '';
-            
-            if (isCurrency) {
-                valorFmt = formatFunction(valor);
-            } else {
-                valorFmt = formatDecimalFunction(valor);
-            }
-
-            if (index < dadosCalculados.length - 1) {
-                const diff = item.variacoes[key] || 0;
-                const classeDiff = diff >= 0 ? 'valor-positivo' : 'valor-negativo';
-                const prefixo = "Var:";
-                diffHtml = `<span class="valor-secundario ${classeDiff}" style="display: block; font-size: 0.8em; text-align: right;">${prefixo} ${formatarPercentual(diff)}</span>`;
-            }
-
-            return `<td class="numero ${classeValor}">
-                        <div style="text-align: right;">
-                            <span class="valor-principal">${valorFmt}</span>
-                            ${diffHtml}
-                        </div>
-                    </td>`;
-        };
-        
-        const proventoValor = item.valoresConvertidos.proventosProjetadosMensal;
-        const isMaxProvento = Math.abs(proventoValor - maxValues.proventosProjetadosMensal) < 0.005 && proventoValor > 0;
-        const classeValorProvento = isMaxProvento ? 'snapshot-max-value' : '';
-        let proventoDiffHtml = '';
-
-        if (index < dadosCalculados.length - 1) {
-            const proventoDiff = item.variacoes.proventosProjetadosMensal || 0;
-            const classeDiff = proventoDiff >= 0 ? 'valor-positivo' : 'valor-negativo';
-            const prefixo = "Var:";
-            proventoDiffHtml = `<span class="valor-secundario ${classeDiff}" style="display: block; font-size: 0.8em; text-align: right;">${prefixo} ${formatarPercentual(proventoDiff)}</span>`;
-        }
-        
-        const proventoHtml = `<td class="numero ${classeValorProvento}">
-                                <div style="text-align: right;">
-                                    <span class="valor-principal">${formatFunction(proventoValor)}</span>
-                                    <small style="display: block; color: #555; font-size: 0.8em; text-align: right;">(${formatarPercentual(item.yieldProjetado)} p.a.)</small>
-                                    ${proventoDiffHtml}
-                                </div>
-                            </td>`;
-
-
-        tableHtml += `
-            <tr class="row-clickable" data-data="${item.data}">
-                <td>${dataFormatada}</td>
-                ${getCellHtml('patrimonioTotal')}
-                ${getCellHtml('valorTotalInvestimentos')}
-                ${getCellHtml('valorFiis')}
-                ${getCellHtml('valorAcoesOutros')}
-                ${getCellHtml('valorTotalContas')}
-                ${getCellHtml('valorTotalMoedas')}
-                ${proventoHtml}
-                ${getCellHtml('ibov', false)}
-                ${getCellHtml('ifix', false)}
-                <td class="controles-col">
-                    <button class="btn btn-primary btn-sm btn-detalhes-snapshot" data-data="${item.data}">Details</button>
-                </td>
-            </tr>`;
-    });
-
-    tableHtml += `</tbody></table>`;
-    container.innerHTML = tableHtml;
-}
-
-function abrirModalHistoricoAtivoSnapshot(ticker) {
-    const modal = document.getElementById('modal-historico-ativo-snapshot');
-    const tituloModal = document.getElementById('modal-historico-ativo-snapshot-titulo');
-    const containerTabela = document.getElementById('container-historico-ativo-snapshot');
-    const ctx = document.getElementById('grafico-historico-ativo-snapshot').getContext('2d');
-
-    tituloModal.textContent = `Price vs Avg Price History - ${ticker}`;
-
-    const dadosHistorico = [];
-    historicoCarteira.forEach(snapshot => {
-        if (snapshot.detalhesCarteira && snapshot.detalhesCarteira.ativos && snapshot.detalhesCarteira.ativos[ticker]) {
-            const dadosAtivo = snapshot.detalhesCarteira.ativos[ticker];
-            if (dadosAtivo.quantidade > 0) { 
-                dadosHistorico.push({
-                    data: snapshot.data,
-                    cotacao: dadosAtivo.precoAtual,
-                    precoMedio: dadosAtivo.precoMedio
-                });
-            }
-        }
-    });
-
-    if (dadosHistorico.length === 0) {
-        containerTabela.innerHTML = '<p>No historical data found for this asset in the snapshots.</p>';
-        if (graficoHistoricoAtivoInstance) graficoHistoricoAtivoInstance.destroy();
-        abrirModal('modal-historico-ativo-snapshot');
-        return;
-    }
-    
-    let tabelaHtml = `<table><thead><tr><th>Date</th><th class="numero">Avg Price</th><th class="numero">Price</th></tr></thead><tbody>`;
-    [...dadosHistorico].reverse().forEach(item => {
-        tabelaHtml += `
-            <tr>
-                <td>${new Date(item.data + 'T12:00:00').toLocaleDateString('en-GB')}</td>
-                <td class="numero">${formatarMoeda(item.precoMedio)}</td>
-                <td class="numero">${formatarMoeda(item.cotacao)}</td>
-            </tr>
-        `;
-    });
-    tabelaHtml += `</tbody></table>`;
-    containerTabela.innerHTML = tabelaHtml;
-
-    if (graficoHistoricoAtivoInstance) {
-        graficoHistoricoAtivoInstance.destroy();
-    }
-
-    graficoHistoricoAtivoInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: dadosHistorico.map(d => new Date(d.data + 'T12:00:00').toLocaleDateString('en-GB')),
-            datasets: [
-                {
-                    label: 'Price (R$)',
-                    data: dadosHistorico.map(d => d.cotacao),
-                    borderColor: 'rgba(52, 152, 219, 1)',
-                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
-                    fill: false,
-                    tension: 0.1
-                },
-                {
-                    label: 'Avg Price (R$)',
-                    data: dadosHistorico.map(d => d.precoMedio),
-                    borderColor: 'rgba(46, 204, 113, 1)',
-                    backgroundColor: 'rgba(46, 204, 113, 0.1)',
-                    fill: false,
-                    tension: 0.1,
-                    borderDash: [5, 5]
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false,
-            },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return `${context.dataset.label}: ${formatarMoeda(context.parsed.y)}`;
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    ticks: {
-                        callback: function(value) {
-                            return formatarMoeda(value);
-                        }
-                    }
-                }
-            }
-        }
-    });
-
-    abrirModal('modal-historico-ativo-snapshot');
-}
-
-function abrirModalDetalhesSnapshot(data) {
-    const snapshot = historicoCarteira.find(s => s.data === data);
-    if (!snapshot) {
-        alert('Error: Snapshot not found for this date.');
-        return;
-    }
-
-    const modalTitulo = document.getElementById('modal-snapshot-detalhes-titulo');
-    const modalConteudo = document.getElementById('modal-snapshot-detalhes-conteudo');
-    const dataFormatada = new Date(data + 'T12:00:00').toLocaleDateString('en-GB');
-    
-    modalTitulo.textContent = `Portfolio Details on ${dataFormatada}`;
-
-    let htmlConteudo = `<div class="snapshot-summary">
-        <div class="summary-item"><label>Total Net Worth</label><span>${formatarMoeda(snapshot.patrimonioTotal)}</span></div>
-        <div class="summary-item"><label>Total Invested</label><span>${formatarMoeda(snapshot.valorTotalInvestimentos)}</span></div>
-        <div class="summary-item"><label>Account Balance</label><span>${formatarMoeda(snapshot.valorTotalContas)}</span></div>
-        <div class="summary-item"><label>Currency Balance</label><span>${formatarMoeda(snapshot.valorTotalMoedas)}</span></div>
-    </div>`;
-
-    const detalhes = snapshot.detalhesCarteira;
-
-    if (detalhes.ativos && Object.keys(detalhes.ativos).length > 0) {
-        htmlConteudo += '<h4>Variable Income Assets</h4><table><thead><tr><th>Asset</th><th class="numero">Qty.</th><th class="numero">Avg Price</th><th class="numero">Current Price</th><th class="numero">Market Value</th></tr></thead><tbody>';
-        Object.entries(detalhes.ativos).sort((a,b) => a[0].localeCompare(b[0])).forEach(([ticker, dados]) => {
-            if (dados.quantidade > 0.0001) {
-                const ativoInfo = todosOsAtivos.find(a => a.ticker === ticker);
-                const tipoHtml = ativoInfo ? `<small style="color: #555; margin-left: 8px;">(${ativoInfo.tipo})</small>` : '';
-                htmlConteudo += `<tr class="row-clickable" data-ticker="${ticker}" title="Click to see price and avg price history">
-                    <td>${ticker}${tipoHtml}</td>
-                    <td class="numero">${Math.round(dados.quantidade)}</td>
-                    <td class="numero">${formatarMoeda(dados.precoMedio)}</td>
-                    <td class="numero">${formatarMoeda(dados.precoAtual)}</td>
-                    <td class="numero">${formatarMoeda(dados.valorDeMercado)}</td>
-                </tr>`;
-            }
-        });
-        htmlConteudo += `</tbody></table>`;
-    }
-
-    if (detalhes.rendaFixa && detalhes.rendaFixa.length > 0) {
-        htmlConteudo += '<h4>Fixed Income Investments</h4><table><thead><tr><th>Description</th><th class="numero">Invested Amount</th><th class="numero">Net Balance</th></tr></thead><tbody>';
-        detalhes.rendaFixa.forEach(rf => {
-            if (rf.saldoLiquido > 0) {
-                htmlConteudo += `<tr>
-                    <td>${rf.descricao}</td>
-                    <td class="numero">${formatarMoeda(rf.valorInvestido)}</td>
-                    <td class="numero">${formatarMoeda(rf.saldoLiquido)}</td>
-                </tr>`;
-            }
-        });
-        htmlConteudo += `</tbody></table>`;
-    }
-    
-    modalConteudo.innerHTML = htmlConteudo;
-    abrirModal('modal-snapshot-detalhes');
-}
-
-
-async function imprimirResumoAtivo(ticker, chartProventosAnuaisInstance, chartPrecoPmInstance) {
-    const container = document.getElementById('container-impressao-ativo');
-    if (!container || !ticker) return;
-
-    const proventosDoAtivo = todosOsProventos.filter(p => p.ticker === ticker);
-    const dataInicioInvestimento = getInicioIninterrupto(ticker);
-    const dataFim = getFimInvestimento([ticker]);
-    const resumoPessoal = calcularResumoProventosParaMultiplosAtivos(proventosDoAtivo, [ticker], dataInicioInvestimento, dataFim);
-    const historicoMovimentacoes = gerarHistoricoCompletoParaAtivo(ticker);
-
-    const agora = new Date();
-    const dataFormatada = agora.toLocaleDateString('en-GB');
-    const horaFormatada = agora.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-
-    let graficoProventosImgHtml = '';
-    if (chartProventosAnuaisInstance && chartProventosAnuaisInstance.canvas) {
-        try {
-            chartProventosAnuaisInstance.options.animation.duration = 0;
-            chartProventosAnuaisInstance.update('none');
-            const imgDataUrl = chartProventosAnuaisInstance.toBase64Image();
-            graficoProventosImgHtml = `<div class="grafico-impressao-container">
-                                <h2>Annual Evolution of Paid Income</h2>
-                                <img src="${imgDataUrl}" alt="Annual Income Chart" style="max-width: 90%; height: auto; margin-top: 15px;">
-                            </div>`;
-            chartProventosAnuaisInstance.options.animation.duration = 1000;
-        } catch (e) {
-            console.error("Erro ao gerar imagem do gráfico de proventos:", e);
-            graficoProventosImgHtml = '<h2>Annual Evolution of Paid Income</h2><p>Could not generate the chart image.</p>';
-        }
-    }
-
-    let graficoPrecoPmImgHtml = '';
-    if (chartPrecoPmInstance && chartPrecoPmInstance.canvas) {
-        try {
-            chartPrecoPmInstance.options.animation.duration = 0;
-            chartPrecoPmInstance.update('none');
-            const imgDataUrl = chartPrecoPmInstance.toBase64Image();
-            graficoPrecoPmImgHtml = `<div class="grafico-impressao-container">
-                                <h2>Price vs. Avg Price (Snapshots History)</h2>
-                                <img src="${imgDataUrl}" alt="Price vs Avg Price Chart" style="max-width: 90%; height: auto; margin-top: 15px;">
-                            </div>`;
-            chartPrecoPmInstance.options.animation.duration = 1000;
-        } catch (e) {
-            console.error("Erro ao gerar imagem do gráfico de Cotação vs. PM:", e);
-            graficoPrecoPmImgHtml = '<h2>Price vs. Avg Price</h2><p>Could not generate the chart image.</p>';
-        }
-    }
-
-    let proventosTabelaHtml = '<h2>Income History</h2>';
-    if (proventosDoAtivo.length > 0) {
-        proventosTabelaHtml += '<table><thead><tr><th>Pay Date</th><th>Type</th><th class="numero">Value/Un.</th><th class="numero">Qty.</th><th class="numero">Total</th><th class="percentual">YOC</th></tr></thead><tbody>';
-        proventosDoAtivo.sort((a, b) => new Date(b.dataPagamento) - new Date(a.dataPagamento)).forEach(p => {
-            let tipoProvFmt = p.tipo || 'N/A';
-            if (tipoProvFmt === 'Rendimento') tipoProvFmt = 'Yield';
-            if (tipoProvFmt === 'Dividendo') tipoProvFmt = 'Div';
-            if (tipoProvFmt === 'Bonificação') tipoProvFmt = 'Bonus';
-            if (tipoProvFmt === 'Outros') tipoProvFmt = 'Other';
-
-            proventosTabelaHtml += `<tr>
-                <td>${new Date(p.dataPagamento + 'T12:00:00').toLocaleDateString('en-GB')}</td>
-                <td>${tipoProvFmt}</td>
-                <td class="numero">${formatarDecimal(p.valorIndividual || 0, 5)}</td>
-                <td class="numero">${Math.round(p.quantidadeNaDataCom || 0)}</td>
-                <td class="numero">${formatarMoeda(p.valorTotalRecebido || 0)}</td>
-                <td class="percentual">${formatarPercentual(p.yieldOnCost || 0)}</td>
-            </tr>`;
-        });
-        proventosTabelaHtml += '</tbody></table>';
-    } else {
-        proventosTabelaHtml += '<p>No income recorded.</p>';
-    }
-
-    let movimentacoesHtml = '<h2>Transaction History</h2><table><thead><tr><th>Date</th><th>Transaction</th><th class="numero">Qty.</th><th class="numero">Avg Price</th></tr></thead><tbody>';
-    historicoMovimentacoes.slice().reverse().forEach(item => {
-        let descTransacao = item.descricaoTransacao;
-        if(descTransacao.includes('Compra')) descTransacao = descTransacao.replace('Compra', 'Buy');
-        if(descTransacao.includes('Venda')) descTransacao = descTransacao.replace('Venda', 'Sell');
-        if(descTransacao.includes('Saldo Inicial')) descTransacao = descTransacao.replace('Saldo Inicial', 'Initial Balance');
-
-        movimentacoesHtml += `<tr>
-            <td>${new Date(item.data + 'T12:00:00').toLocaleDateString('en-GB')}</td>
-            <td>${descTransacao}</td>
-            <td class="numero">${Math.round(item.qtdConsolidada)}</td>
-            <td class="numero">${formatarPrecoMedio(item.precoMedio)}</td>
-        </tr>`;
-    });
-    movimentacoesHtml += '</tbody></table>';
-
-    let frequenciaHtml = '';
-    if (proventosDoAtivo.length > 0) {
-        const frequenciaPorAno = {};
-        proventosDoAtivo.forEach(p => {
-            if (!p.dataPagamento || !p.dataCom) return;
-            const anoPagamento = new Date(p.dataPagamento + 'T12:00:00').getUTCFullYear();
-            if (!frequenciaPorAno[anoPagamento]) {
-                frequenciaPorAno[anoPagamento] = { com: new Set(), pag: new Set() };
-            }
-            frequenciaPorAno[anoPagamento].com.add(new Date(p.dataCom + 'T12:00:00').getUTCMonth());
-            frequenciaPorAno[anoPagamento].pag.add(new Date(p.dataPagamento + 'T12:00:00').getUTCMonth());
-        });
-
-        frequenciaHtml += '<div class="frequencia-impressao-container"><h2>Income Frequency</h2>';
-        const mesesAbrev = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const anos = Object.keys(frequenciaPorAno).sort((a, b) => b - a);
-
-        anos.forEach(ano => {
-            const dadosAno = frequenciaPorAno[ano];
-            const mesesCom = [...dadosAno.com].sort((a,b) => a - b).map(m => mesesAbrev[m]).join(', ');
-            const mesesPag = [...dadosAno.pag].sort((a,b) => a - b).map(m => mesesAbrev[m]).join(', ');
-            frequenciaHtml += `<div class="frequencia-ano-bloco">
-                                <strong>${ano}</strong>
-                                <div class="frequencia-linha"><span>Ex-Date:</span> ${mesesCom}</div>
-                                <div class="frequencia-linha"><span>Pay Date:</span> ${mesesPag}</div>
-                           </div>`;
-        });
-        frequenciaHtml += '</div>';
-    }
-
-    container.innerHTML = `
-        <h1>Asset Report: ${ticker}</h1>
-        <p class="impressao-timestamp">Generated on ${dataFormatada} at ${horaFormatada}</p>
-        <h2>Personal Performance (Projected)</h2>
-        <table>
-            <tr><td>Annual Projection (Current Pos.)</td><td class="numero">${formatarMoeda(resumoPessoal.projecaoAnualTotal)}</td></tr>
-            <tr><td>Monthly Average (Current Pos.)</td><td class="numero">${formatarMoeda(resumoPessoal.mediaMensalTotal)}</td></tr>
-            <tr><td>Yield on Cost (Annualized)</td><td class="percentual">${formatarPercentual(resumoPessoal.yocCustoAnual)}</td></tr>
-        </table>
-        ${movimentacoesHtml}
-        ${graficoPrecoPmImgHtml} 
-        ${proventosTabelaHtml}
-        ${graficoProventosImgHtml}
-        ${frequenciaHtml}
-    `;
-
-    const body = document.body;
-    body.classList.add('imprimindo-resumo-ativo');
-    container.classList.add('imprimindo');
-
-    setTimeout(() => {
-        window.print();
-
-        setTimeout(() => {
-            body.classList.remove('imprimindo-resumo-ativo');
-            container.classList.remove('imprimindo');
-        }, 500);
-    }, 250);
-}
-
-
-
-
-

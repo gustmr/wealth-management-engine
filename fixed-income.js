@@ -1,47 +1,4 @@
-function calcularSaldosRFEmData(ativoRF, dataLimite) {
-    // --- INÍCIO DA ALTERAÇÃO ---
-    // Descobre dinamicamente a data de início do ciclo de investimento atual.
-    const dataDeCorte = getDataInicioCicloAtualRF(ativoRF);
-
-    // 1. Usa a função auxiliar para obter o capital investido APENAS no ciclo atual.
-    const capitalInvestidoTotal = getCapitalInvestidoNoCicloAtual(ativoRF, dataLimite);
-
-    // 2. Filtra as movimentações de resgate APENAS do ciclo atual.
-    const resgatesNoCiclo = todasAsMovimentacoes.filter(t =>
-        t.source === 'resgate_rf' &&
-        t.sourceId === ativoRF.id &&
-        t.data <= dataLimite &&
-        t.data > dataDeCorte
-    );
-    
-    // 3. Calcula o capital retornado e o total resgatado a partir do filtro acima.
-    const capitalRetornadoTotal = resgatesNoCiclo.reduce((sum, m) => sum + (m.devolucaoCapital || 0), 0);
-    const resgatesTotais = resgatesNoCiclo.reduce((sum, m) => sum + Math.abs(m.valor), 0);
-
-    const capitalInvestidoRestante = capitalInvestidoTotal - capitalRetornadoTotal;
-
-    // 4. Encontra o último rendimento bruto registrado APENAS no ciclo atual.
-    const rendimentosPassados = todosOsRendimentosRFNaoRealizados
-        .filter(r => 
-            r.ativoId === ativoRF.id && 
-            r.data <= dataLimite &&
-            r.data > dataDeCorte
-        )
-        .sort((a, b) => new Date(b.data) - new Date(a.data));
-    
-    const rendimentoAcumuladoTotal = rendimentosPassados.length > 0 ? rendimentosPassados[0].rendimento : 0;
-
-    // 5. A lógica de cálculo do saldo e rendimento permanece a mesma, mas agora com dados filtrados.
-    const saldoLiquidoNaData = (capitalInvestidoTotal + rendimentoAcumuladoTotal) - resgatesTotais;
-    const rendimentoBrutoRestante = saldoLiquidoNaData - capitalInvestidoRestante;
-
-    return {
-        valorInvestido: arredondarMoeda(capitalInvestidoRestante),
-        saldoLiquido: arredondarMoeda(saldoLiquidoNaData),
-        rendimentoBruto: arredondarMoeda(rendimentoBrutoRestante)
-    };
-    // --- FIM DA ALTERAÇÃO ---
-}
+// Fixed Income Engine // Motor de Renda Fixa
 function atualizarSaldosCacheAtivoRF(ativoId) {
     const ativo = todosOsAtivosRF.find(a => a.id === ativoId);
     if (!ativo) return;
@@ -130,6 +87,50 @@ function getCapitalInvestidoNoCicloAtual(ativo, dataLimite) {
 
     return capitalTotalCiclo;
 }
+function calcularSaldosRFEmData(ativoRF, dataLimite) {
+    // --- INÍCIO DA ALTERAÇÃO ---
+    // Descobre dinamicamente a data de início do ciclo de investimento atual.
+    const dataDeCorte = getDataInicioCicloAtualRF(ativoRF);
+
+    // 1. Usa a função auxiliar para obter o capital investido APENAS no ciclo atual.
+    const capitalInvestidoTotal = getCapitalInvestidoNoCicloAtual(ativoRF, dataLimite);
+
+    // 2. Filtra as movimentações de resgate APENAS do ciclo atual.
+    const resgatesNoCiclo = todasAsMovimentacoes.filter(t =>
+        t.source === 'resgate_rf' &&
+        t.sourceId === ativoRF.id &&
+        t.data <= dataLimite &&
+        t.data > dataDeCorte
+    );
+    
+    // 3. Calcula o capital retornado e o total resgatado a partir do filtro acima.
+    const capitalRetornadoTotal = resgatesNoCiclo.reduce((sum, m) => sum + (m.devolucaoCapital || 0), 0);
+    const resgatesTotais = resgatesNoCiclo.reduce((sum, m) => sum + Math.abs(m.valor), 0);
+
+    const capitalInvestidoRestante = capitalInvestidoTotal - capitalRetornadoTotal;
+
+    // 4. Encontra o último rendimento bruto registrado APENAS no ciclo atual.
+    const rendimentosPassados = todosOsRendimentosRFNaoRealizados
+        .filter(r => 
+            r.ativoId === ativoRF.id && 
+            r.data <= dataLimite &&
+            r.data > dataDeCorte
+        )
+        .sort((a, b) => new Date(b.data) - new Date(a.data));
+    
+    const rendimentoAcumuladoTotal = rendimentosPassados.length > 0 ? rendimentosPassados[0].rendimento : 0;
+
+    // 5. A lógica de cálculo do saldo e rendimento permanece a mesma, mas agora com dados filtrados.
+    const saldoLiquidoNaData = (capitalInvestidoTotal + rendimentoAcumuladoTotal) - resgatesTotais;
+    const rendimentoBrutoRestante = saldoLiquidoNaData - capitalInvestidoRestante;
+
+    return {
+        valorInvestido: arredondarMoeda(capitalInvestidoRestante),
+        saldoLiquido: arredondarMoeda(saldoLiquidoNaData),
+        rendimentoBruto: arredondarMoeda(rendimentoBrutoRestante)
+    };
+    // --- FIM DA ALTERAÇÃO ---
+}
 function salvarAtivoRF(event) {
     event.preventDefault();
     const id = document.getElementById('ativo-rf-id').value;
@@ -192,6 +193,27 @@ function salvarAtivoRF(event) {
     }
     fecharModal('modal-cadastro-ativo-rf');
 }
+function deletarAtivoRF(id) {
+    const ativo = todosOsAtivosRF.find(a => a.id === id);
+    if (!ativo) return;
+    if (confirm(`Tem certeza que deseja INATIVAR esta aplicação de renda fixa?\n\n"${ativo.descricao}"\n\nEla será ocultada da tela de posição, mas seu histórico será mantido.`)) {
+        // Verifica se a descrição já não termina com (inativa) para não duplicar
+        if (!ativo.descricao.trim().toLowerCase().endsWith('(inativa)')) {
+            ativo.descricao = `${ativo.descricao.trim()} (inativa)`;
+        }
+
+        salvarAtivosRF();
+        
+        // Atualiza ambas as telas para refletir a mudança
+        if (telas.cadastroRF.style.display === 'block') {
+            renderizarTabelaAtivosRF();
+        }
+        if(telas.rendaFixa.style.display === 'block') {
+            renderizarPosicaoRF();
+        }
+        alert('Aplicação inativada com sucesso!');
+    }
+}
 function salvarAporteRF(event) {
     event.preventDefault();
     const ativoId = parseFloat(document.getElementById('aporte-rf-id').value);
@@ -227,6 +249,7 @@ function salvarAporteRF(event) {
         renderizarTelaCaixaGlobal(true);
     }
 }
+
 function salvarResgateRF(event) {
     event.preventDefault();
     const ativoId = parseFloat(document.getElementById('resgate-rf-id').value);
@@ -276,78 +299,6 @@ function salvarResgateRF(event) {
 
     alert(`Resgate de ${formatarMoeda(valorResgate)} registrado com sucesso!`);
 }
-function salvarEdicaoSaldoLiquidoRF(ativoRFId, novoSaldoStr) {
-    const novoSaldo = parseDecimal(novoSaldoStr);
-    const ativo = todosOsAtivosRF.find(a => a.id === ativoRFId);
-    
-    if (ativo && !isNaN(novoSaldo)) {
-        const dataEdicao = new Date().toISOString().split('T')[0];
-        
-        // --- INÍCIO DA ALTERAÇÃO ---
-        // Agora, usa a nova função auxiliar para obter o capital investido APENAS no ciclo atual.
-        const valorInvestidoTotalAtual = getCapitalInvestidoNoCicloAtual(ativo, dataEdicao);
-        // --- FIM DA ALTERAÇÃO ---
-
-        const rendimentoTotalBruto = novoSaldo - valorInvestidoTotalAtual;
-
-        const indexExistente = todosOsRendimentosRFNaoRealizados.findIndex(
-            r => r.ativoId === ativo.id && r.data === dataEdicao
-        );
-
-        if (indexExistente > -1) {
-            todosOsRendimentosRFNaoRealizados[indexExistente].rendimento = rendimentoTotalBruto;
-        } else {
-            todosOsRendimentosRFNaoRealizados.push({
-                id: Date.now(),
-                ativoId: ativo.id,
-                data: dataEdicao,
-                rendimento: rendimentoTotalBruto
-            });
-        }
-        
-        ativo.saldoLiquido = novoSaldo;
-        salvarAtivosRF();
-        salvarRendimentosRFNaoRealizados();
-    }
-    renderizarPosicaoRF();
-}
-function abrirModalCadastroAtivoRF(ativoRFParaEditar = null) {
-    const form = document.getElementById('form-cadastro-ativo-rf');
-    form.reset();
-    const modalTitulo = document.getElementById('modal-ativo-rf-titulo');
-    const valorInvestidoInput = document.getElementById('ativo-rf-valor-investido');
-    const dataAplicacaoInput = document.getElementById('ativo-rf-data-aplicacao');
-    const instituicaoSelect = document.getElementById('ativo-rf-instituicao');
-
-    // Tradução: Select...
-    instituicaoSelect.innerHTML = '<option value="">Select...</option>' + getTodasInstituicoesAtivas().map(c => `<option value="${c}">${c}</option>`).join('');
-
-    if (ativoRFParaEditar) {
-        // Tradução: Título Edição
-        modalTitulo.textContent = 'Edit Fixed Income Investment';
-        document.getElementById('ativo-rf-id').value = ativoRFParaEditar.id;
-        document.getElementById('ativo-rf-descricao').value = ativoRFParaEditar.descricao;
-        instituicaoSelect.value = ativoRFParaEditar.instituicao;
-        valorInvestidoInput.value = formatarDecimalParaInput(ativoRFParaEditar.valorInvestido);
-        dataAplicacaoInput.value = ativoRFParaEditar.dataAplicacao;
-        document.getElementById('ativo-rf-data-vencimento').value = ativoRFParaEditar.dataVencimento;
-        document.getElementById('ativo-rf-isento-ir').checked = ativoRFParaEditar.isentoIR;
-
-        valorInvestidoInput.readOnly = false;
-        dataAplicacaoInput.readOnly = false;
-    } else {
-        // Tradução: Título Cadastro
-        modalTitulo.textContent = 'New Fixed Income Investment';
-        document.getElementById('ativo-rf-id').value = '';
-        dataAplicacaoInput.value = new Date().toISOString().split('T')[0]; 
-        
-        valorInvestidoInput.readOnly = false;
-        dataAplicacaoInput.readOnly = false;
-    }
-    
-    modalCadastroAtivoRF.style.display = 'block';
-    document.getElementById('ativo-rf-descricao').focus();
-}
 function abrirModalAporteRF(ativoRFId) {
     const ativo = todosOsAtivosRF.find(a => a.id === ativoRFId);
     if (!ativo) return;
@@ -388,6 +339,41 @@ function abrirModalResgateRF(ativoRFId) {
     
     abrirModal('modal-resgate-rf');
     document.getElementById('resgate-rf-valor').focus();
+}
+function abrirModalCadastroAtivoRF(ativoRFParaEditar = null) {
+    const form = document.getElementById('form-cadastro-ativo-rf');
+    form.reset();
+    const modalTitulo = document.getElementById('modal-ativo-rf-titulo');
+    const valorInvestidoInput = document.getElementById('ativo-rf-valor-investido');
+    const dataAplicacaoInput = document.getElementById('ativo-rf-data-aplicacao');
+    const instituicaoSelect = document.getElementById('ativo-rf-instituicao');
+
+    instituicaoSelect.innerHTML = '<option value="">Selecione...</option>' + getTodasInstituicoesAtivas().map(c => `<option value="${c}">${c}</option>`).join('');
+
+    if (ativoRFParaEditar) {
+        modalTitulo.textContent = 'Editar Aplicação em Renda Fixa';
+        document.getElementById('ativo-rf-id').value = ativoRFParaEditar.id;
+        document.getElementById('ativo-rf-descricao').value = ativoRFParaEditar.descricao;
+        instituicaoSelect.value = ativoRFParaEditar.instituicao;
+        valorInvestidoInput.value = formatarDecimalParaInput(ativoRFParaEditar.valorInvestido);
+        dataAplicacaoInput.value = ativoRFParaEditar.dataAplicacao;
+        document.getElementById('ativo-rf-data-vencimento').value = ativoRFParaEditar.dataVencimento;
+        document.getElementById('ativo-rf-isento-ir').checked = ativoRFParaEditar.isentoIR;
+
+        // CORREÇÃO: Campos de valor e data inicial agora são editáveis
+        valorInvestidoInput.readOnly = false;
+        dataAplicacaoInput.readOnly = false;
+    } else {
+        modalTitulo.textContent = 'Nova Aplicação em Renda Fixa';
+        document.getElementById('ativo-rf-id').value = '';
+        dataAplicacaoInput.value = new Date().toISOString().split('T')[0]; // Data padrão
+        
+        valorInvestidoInput.readOnly = false;
+        dataAplicacaoInput.readOnly = false;
+    }
+    
+    modalCadastroAtivoRF.style.display = 'block';
+    document.getElementById('ativo-rf-descricao').focus();
 }
 function abrirModalHistoricoRF(ativoRFId) {
     const ativo = todosOsAtivosRF.find(a => a.id === ativoRFId);
@@ -471,21 +457,135 @@ function renderizarHistoricoRF(ativoRFId) {
     tableHtml += '</tbody></table>';
     container.innerHTML = tableHtml;
 }
+
+function abrirModalEdicaoMovimentacaoRF(transacaoId) {
+    const transacaoParaEditar = todasAsMovimentacoes.find(t => t.id === transacaoId);
+    
+    if (!transacaoParaEditar) {
+        alert('Erro: Transação não encontrada.');
+        return;
+    }
+    abrirModalNovaTransacaoMoeda(transacaoParaEditar);
+}
+function renderizarTabelaAtivosRF() {
+    const container = document.getElementById('lista-de-ativos-rf');
+    const tableHeaders = `
+        <th>Descrição</th>
+        <th>Instituição</th>
+        <th>Data Aplicação</th>
+        <th>Data Vencimento</th>
+        <th class="numero">Valor Investido</th>
+        <th class="numero">Saldo Líquido</th>
+        <th class="controles-col">Controles</th>`;
+    container.innerHTML = `<table><thead><tr>${tableHeaders}</tr></thead><tbody></tbody></table>`;
+    
+    const body = container.querySelector('tbody');
+    body.innerHTML = '';
+    
+    if (todosOsAtivosRF.length === 0) {
+        body.innerHTML = '<tr><td colspan="7" style="text-align:center;">Nenhuma aplicação de Renda Fixa cadastrada.</td></tr>';
+        return;
+    }
+
+    todosOsAtivosRF.sort((a,b) => a.descricao.localeCompare(b.descricao)).forEach(ativo => {
+        const tr = document.createElement('tr');
+        tr.dataset.rfId = ativo.id;
+        tr.innerHTML = `
+            <td>${ativo.descricao}</td>
+            <td>${ativo.instituicao}</td>
+            <td>${new Date(ativo.dataAplicacao + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+            <td>${new Date(ativo.dataVencimento + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+            <td class="numero">${formatarMoeda(ativo.valorInvestido)}</td>
+            <td class="numero">${formatarMoeda(ativo.saldoLiquido)}</td>
+            <td class="controles-col">
+                <i class="fas fa-edit acao-btn edit" title="Editar Aplicação" data-ativo-rf-id="${ativo.id}"></i>
+                <i class="fas fa-trash acao-btn delete" title="Excluir Aplicação" data-ativo-rf-id="${ativo.id}"></i>
+            </td>`;
+        body.appendChild(tr);
+    });
+}
+function salvarEdicaoSaldoLiquidoRF(ativoRFId, novoSaldoStr) {
+    const novoSaldo = parseDecimal(novoSaldoStr);
+    const ativo = todosOsAtivosRF.find(a => a.id === ativoRFId);
+    
+    if (ativo && !isNaN(novoSaldo)) {
+        const dataEdicao = new Date().toISOString().split('T')[0];
+        
+        // --- INÍCIO DA ALTERAÇÃO ---
+        // Agora, usa a nova função auxiliar para obter o capital investido APENAS no ciclo atual.
+        const valorInvestidoTotalAtual = getCapitalInvestidoNoCicloAtual(ativo, dataEdicao);
+        // --- FIM DA ALTERAÇÃO ---
+
+        const rendimentoTotalBruto = novoSaldo - valorInvestidoTotalAtual;
+
+        const indexExistente = todosOsRendimentosRFNaoRealizados.findIndex(
+            r => r.ativoId === ativo.id && r.data === dataEdicao
+        );
+
+        if (indexExistente > -1) {
+            todosOsRendimentosRFNaoRealizados[indexExistente].rendimento = rendimentoTotalBruto;
+        } else {
+            todosOsRendimentosRFNaoRealizados.push({
+                id: Date.now(),
+                ativoId: ativo.id,
+                data: dataEdicao,
+                rendimento: rendimentoTotalBruto
+            });
+        }
+        
+        ativo.saldoLiquido = novoSaldo;
+        salvarAtivosRF();
+        salvarRendimentosRFNaoRealizados();
+    }
+    renderizarPosicaoRF();
+}
 function renderizarPosicaoRF() {
     const container = document.getElementById('posicao-rf-container');
     const summaryContainer = document.getElementById('summary-rf');
-    const filtroDataInput = document.querySelector('#tela-renda-fixa .date-filter');
-    const filtroData = filtroDataInput.value || new Date().toISOString().split('T')[0];
+    
+    // Seletores dos Filtros (Estáticos no HTML)
+    const filtroDataInput = document.getElementById('rf-filtro-data');
+    const filtroInstituicaoSelect = document.getElementById('rf-filtro-instituicao');
 
+    // Define data padrão se vazia
+    if (!filtroDataInput.value) {
+        filtroDataInput.value = new Date().toISOString().split('T')[0];
+    }
+    const filtroData = filtroDataInput.value;
+
+    // --- Lógica de População do Select de Instituições ---
+    // Pega a instituição selecionada atualmente para manter a seleção após o render
+    const instituicaoSelecionadaAnteriormente = filtroInstituicaoSelect.value;
+    
+    // Extrai instituições únicas dos ativos ativos
+    const instituicoesUnicas = [...new Set(todosOsAtivosRF
+        .filter(a => !(a.descricao || '').toLowerCase().includes('encerrada'))
+        .map(a => a.instituicao))].sort();
+
+    // Reconstrói as opções do select mantendo a estrutura estática
+    let optionsHtml = '<option value="consolidado">Consolidado (Todas)</option>';
+    optionsHtml += instituicoesUnicas.map(inst => `<option value="${inst}">${inst}</option>`).join('');
+    filtroInstituicaoSelect.innerHTML = optionsHtml;
+
+    // Restaura seleção anterior se ainda existir
+    if (instituicaoSelecionadaAnteriormente && (instituicaoSelecionadaAnteriormente === 'consolidado' || instituicoesUnicas.includes(instituicaoSelecionadaAnteriormente))) {
+        filtroInstituicaoSelect.value = instituicaoSelecionadaAnteriormente;
+    }
+    const filtroInstituicao = filtroInstituicaoSelect.value;
+
+
+    // --- Filtragem e Cálculo dos Dados ---
     const ativosParaExibir = [];
+    
     todosOsAtivosRF.forEach(ativo => {
         const descricao = (ativo.descricao || '').toLowerCase();
-        // Tradução: inactive em vez de inativa
-        const isInativa = descricao.includes('inactive') || descricao.includes('encerrada') || descricao.includes('inativa');
-        
+        const isInativa = descricao.includes('inativa') || descricao.includes('encerrada');
         const existeNaData = ativo.dataAplicacao <= filtroData;
         
-        if (isInativa || !existeNaData) {
+        // Filtro de Instituição
+        const pertenceInstituicao = filtroInstituicao === 'consolidado' || ativo.instituicao === filtroInstituicao;
+
+        if (isInativa || !existeNaData || !pertenceInstituicao) {
             return;
         }
 
@@ -496,17 +596,25 @@ function renderizarPosicaoRF() {
         }
     });
     
+    // --- Renderização: Caso Sem Dados ---
     if (ativosParaExibir.length === 0) {
-        // Tradução do estado vazio
-        container.innerHTML = '<p style="text-align: center;">No Fixed Income investments found for the selected date.</p>';
+        container.innerHTML = `
+            <div class="dash-card">
+                <div class="dash-body" style="text-align: center; padding: 40px; color: #666;">
+                    <i class="fas fa-university" style="font-size: 2rem; margin-bottom: 15px; display: block; color: #bdc3c7;"></i>
+                    Nenhuma aplicação de Renda Fixa encontrada para os filtros selecionados.
+                </div>
+            </div>`;
         summaryContainer.innerHTML = '';
         return;
     }
     
+    // --- Renderização: Cálculos Totais ---
     let custoTotalRF = 0;
     let valorLiquidoRF = 0;
     let corpoTabela = '';
     
+    // Ordenação e Construção das Linhas
     ativosParaExibir.sort((a,b) => a.descricao.localeCompare(b.descricao)).forEach(ativo => {
         const saldos = ativo.saldosCalculados;
         custoTotalRF += saldos.valorInvestido;
@@ -515,129 +623,122 @@ function renderizarPosicaoRF() {
         const diasCorridos = calcularDiffDias(ativo.dataAplicacao, filtroData);
         const rentabilidade = saldos.valorInvestido > 0 ? (saldos.rendimentoBruto / saldos.valorInvestido) : 0;
 
+        // Lógica de Snapshot (Mantida do original)
         const ultimoSnapshot = todosOsRendimentosRFNaoRealizados
             .filter(r => r.ativoId === ativo.id)
             .sort((a,b) => new Date(b.data) - new Date(a.data))[0];
         
-        // Tradução: Atualizado em / Nunca atualizado
         const dataUltimoSnapshot = ultimoSnapshot 
-            ? `Updated on: ${new Date(ultimoSnapshot.data + 'T12:00:00').toLocaleDateString('en-GB')}` 
-            : 'Never updated';
+            ? `Atualizado: ${new Date(ultimoSnapshot.data + 'T12:00:00').toLocaleDateString('pt-BR')}` 
+            : 'Sem atualização';
 
         corpoTabela += `
             <tr>
-                <td>${ativo.descricao}</td>
-                <td>${ativo.instituicao}</td>
-                <td class="numero">${new Date(ativo.dataAplicacao + 'T12:00:00').toLocaleDateString('en-GB')}</td>
-                <td class="numero">${new Date(ativo.dataVencimento + 'T12:00:00').toLocaleDateString('en-GB')}</td>
+                <td style="font-weight: 500;">
+                    ${ativo.descricao}
+                    <div style="font-size: 0.8em; color: #7f8c8d;">${ativo.instituicao}</div>
+                </td>
+                <td class="numero">${new Date(ativo.dataAplicacao + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+                <td class="numero">${new Date(ativo.dataVencimento + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
                 <td class="numero">${diasCorridos}</td>
                 <td class="numero">${formatarMoeda(saldos.valorInvestido)}</td>
-                <td class="numero editable-cell-container">
-                    <div contenteditable="true" class="editable-saldo-rf" data-rf-id="${ativo.id}" title="Click to edit the net balance">${formatarMoeda(saldos.saldoLiquido)}</div>
-                    <small class="snapshot-date">${dataUltimoSnapshot}</small>
+                
+                <td class="numero editable-cell-container" style="background-color: #fcfcfc;">
+                    <div contenteditable="true" class="editable-saldo-rf" data-rf-id="${ativo.id}" title="Clique para editar o saldo líquido" style="font-weight: bold; color: #2c3e50;">
+                        ${formatarMoeda(saldos.saldoLiquido)}
+                    </div>
+                    <small class="snapshot-date" style="display: block; font-size: 0.7em; color: #95a5a6;">${dataUltimoSnapshot}</small>
                 </td>
-                <td class="numero ${saldos.rendimentoBruto >= 0 ? 'valor-positivo' : 'valor-negativo'}">${formatarMoeda(saldos.rendimentoBruto)}</td>
-                <td class="percentual ${rentabilidade >= 0 ? 'valor-positivo' : 'valor-negativo'}">${formatarPercentual(rentabilidade)}</td>
-                <td class="controles-col">
-                    <button class="btn btn-sm btn-success btn-aportar-rf btn-acao-rf" data-rf-id="${ativo.id}" title="Contribute">+</button>
-                    <button class="btn btn-sm btn-danger btn-resgatar-rf btn-acao-rf" data-rf-id="${ativo.id}" title="Redeem">-</button>
-                    <button class="btn btn-sm btn-secondary btn-historico-rf btn-acao-rf" data-rf-id="${ativo.id}" title="History"><i class="fas fa-history"></i></button>
-                    <i class="fas fa-trash acao-btn delete" title="Inactivate Investment" data-ativo-rf-id="${ativo.id}"></i>
-                    </td>
+                
+                <td class="numero ${saldos.rendimentoBruto >= 0 ? 'valor-positivo' : 'valor-negativo'}">
+                    ${formatarMoeda(saldos.rendimentoBruto)}
+                </td>
+                <td class="percentual ${rentabilidade >= 0 ? 'valor-positivo' : 'valor-negativo'}">
+                    ${formatarPercentual(rentabilidade)}
+                </td>
+                
+                <td class="controles-col text-right">
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-success btn-aportar-rf btn-acao-rf" data-rf-id="${ativo.id}" title="Aportar" style="color: white;">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger btn-resgatar-rf btn-acao-rf" data-rf-id="${ativo.id}" title="Resgatar" style="color: white;">
+                            <i class="fas fa-minus"></i>
+                        </button>
+                        <button class="btn btn-sm btn-info btn-historico-rf btn-acao-rf" data-rf-id="${ativo.id}" title="Histórico" style="color: white;">
+                            <i class="fas fa-history"></i>
+                        </button>
+                        <button class="btn btn-sm btn-secondary delete" data-ativo-rf-id="${ativo.id}" title="Excluir/Inativar" style="color: white;">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </td>
             </tr>
         `;
     });
 
     const rendimentoTotal = valorLiquidoRF - custoTotalRF;
     const rentabilidadeTotal = custoTotalRF > 0 ? rendimentoTotal / custoTotalRF : 0;
-    const classeResultado = rendimentoTotal >= 0 ? 'valor-positivo' : 'valor-negativo';
+    const isPositivo = rendimentoTotal >= 0;
+    const corResultado = isPositivo ? '#27ae60' : '#e74c3c'; // Verde ou Vermelho
+    const iconeResultado = isPositivo ? 'fa-arrow-up' : 'fa-arrow-down';
 
-    // Tradução sumário RF
+    // --- Renderização: Cards de Resumo (Topo) ---
     summaryContainer.innerHTML = `
-        <div class="summary-item">Total Cost (Contributions) <span>${formatarMoeda(custoTotalRF)}</span></div>
-        <div class="summary-item">Current Net Balance <span>${formatarMoeda(valorLiquidoRF)}</span></div>
-        <div class="summary-item">Total Yield <span class="${classeResultado}">${formatarMoeda(rendimentoTotal)} (${formatarPercentual(rentabilidadeTotal)})</span></div>
+        <div class="dash-summary-card card-invest">
+            <div class="dash-card-title">Total Aplicado</div>
+            <div class="dash-card-value">${formatarMoeda(custoTotalRF)}</div>
+        </div>
+        <div class="dash-summary-card card-patrimonio">
+            <div class="dash-card-title">Saldo Líquido</div>
+            <div class="dash-card-value">${formatarMoeda(valorLiquidoRF)}</div>
+        </div>
+        <div class="dash-summary-card" style="border-bottom: 4px solid ${corResultado}">
+            <div class="dash-card-title">Rendimento</div>
+            <div class="dash-card-value" style="color: ${corResultado}">
+                ${formatarMoeda(rendimentoTotal)}
+            </div>
+        </div>
+        <div class="dash-summary-card">
+            <div class="dash-card-title">Rentabilidade Média</div>
+            <div class="dash-card-value" style="color: ${corResultado}">
+                <i class="fas ${iconeResultado}" style="font-size: 0.6em;"></i> ${formatarPercentual(rentabilidadeTotal)}
+            </div>
+        </div>
     `;
-    const headers = `
-        <th>Description</th>
-        <th>Institution</th>
-        <th class="numero">Invest. Date</th>
-        <th class="numero">Maturity</th>
-        <th class="numero">Days Elapsed</th>
-        <th class="numero">Invested Amount</th>
-        <th class="numero">Current Net Balance</th>
-        <th class="numero">Net Yield</th>
-        <th class="percentual">Profitability</th>
-        <th class="controles-col">Actions</th>`;
 
-    container.innerHTML = `<table><thead><tr>${headers}</tr></thead><tbody>${corpoTabela}</tbody></table>`;
-}
-function renderizarTabelaAtivosRF() {
-    const container = document.getElementById('lista-de-ativos-rf');
-    // Tradução dos cabeçalhos
-    const tableHeaders = `
-        <th>Description</th>
-        <th>Institution</th>
-        <th>Investment Date</th>
-        <th>Maturity Date</th>
-        <th class="numero">Invested Amount</th>
-        <th class="numero">Net Balance</th>
-        <th class="controles-col">Actions</th>`;
-    container.innerHTML = `<table><thead><tr>${tableHeaders}</tr></thead><tbody></tbody></table>`;
+    // --- Renderização: Tabela Principal (Card) ---
+    container.innerHTML = `
+        <div class="dash-card">
+            <div class="dash-header" style="background-color: #27ae60; color: white; padding: 15px;">
+                <h3 style="margin: 0; font-size: 1.1em;"><i class="fas fa-list"></i> Detalhamento dos Ativos</h3>
+            </div>
+            <div class="dash-body table-responsive">
+                <table class="table table-hover table-striped">
+                    <thead>
+                        <tr>
+                            <th>Descrição</th>
+                            <th class="numero">Aplicação</th>
+                            <th class="numero">Vencimento</th>
+                            <th class="numero">Dias</th>
+                            <th class="numero">Valor Investido</th>
+                            <th class="numero">Saldo Líquido</th>
+                            <th class="numero">Rendimento</th>
+                            <th class="percentual">Rentabilidade</th>
+                            <th class="text-right">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${corpoTabela}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
     
-    const body = container.querySelector('tbody');
-    body.innerHTML = '';
-    
-    if (todosOsAtivosRF.length === 0) {
-        // Tradução: Estado vazio
-        body.innerHTML = '<tr><td colspan="7" style="text-align:center;">No Fixed Income investments registered.</td></tr>';
-        return;
-    }
-
-    todosOsAtivosRF.sort((a,b) => a.descricao.localeCompare(b.descricao)).forEach(ativo => {
-        const tr = document.createElement('tr');
-        tr.dataset.rfId = ativo.id;
-        
-        // Usa formatarData (criada no bloco 1) ou toLocaleDateString('en-GB')
-        const dataAplicacao = new Date(ativo.dataAplicacao + 'T12:00:00').toLocaleDateString('en-GB');
-        const dataVencimento = new Date(ativo.dataVencimento + 'T12:00:00').toLocaleDateString('en-GB');
-
-        // Tradução dos tooltips
-        tr.innerHTML = `
-            <td>${ativo.descricao}</td>
-            <td>${ativo.instituicao}</td>
-            <td>${dataAplicacao}</td>
-            <td>${dataVencimento}</td>
-            <td class="numero">${formatarMoeda(ativo.valorInvestido)}</td>
-            <td class="numero">${formatarMoeda(ativo.saldoLiquido)}</td>
-            <td class="controles-col">
-                <i class="fas fa-edit acao-btn edit" title="Edit Investment" data-ativo-rf-id="${ativo.id}"></i>
-                <i class="fas fa-trash acao-btn delete" title="Delete Investment" data-ativo-rf-id="${ativo.id}"></i>
-            </td>`;
-        body.appendChild(tr);
-    });
-}
-function deletarAtivoRF(id) {
-    const ativo = todosOsAtivosRF.find(a => a.id === id);
-    if (!ativo) return;
-
-    // Tradução: Confirmação de inativação
-    // NOTA: Mantive a string "(inativa)" no código para não quebrar a lógica de filtro existente
-    if (confirm(`Are you sure you want to INACTIVATE this fixed income investment?\n\n"${ativo.descricao}"\n\nIt will be hidden from the position screen, but its history will be kept.`)) {
-        
-        if (!ativo.descricao.trim().toLowerCase().endsWith('(inativa)')) {
-            ativo.descricao = `${ativo.descricao.trim()} (inativa)`;
-        }
-
-        salvarAtivosRF();
-        
-        if (telas.cadastroRF.style.display === 'block') {
-            renderizarTabelaAtivosRF();
-        }
-        if(telas.rendaFixa.style.display === 'block') {
-            renderizarPosicaoRF();
-        }
-        // Tradução: Sucesso
-        alert('Investment successfully inactivated!');
+    // Atualiza texto informativo no card de filtros
+    const infoFiltroElement = document.getElementById('filtro-info-rf');
+    if(infoFiltroElement) {
+        infoFiltroElement.innerText = filtroInstituicao === 'consolidado' ? 'Visualizando Todas as Instituições' : `Filtro: ${filtroInstituicao}`;
     }
 }
