@@ -4,7 +4,7 @@
 ## 📌 Overview
 This project is a Proof of Concept (PoC) for a comprehensive Wealth Management system. Born from the need to solve real-world asset allocation and tax calculation challenges, it has evolved into a robust, fully modularised financial logic engine.
 
-Initially engineered to solve the operational complexities of tracking multi-broker custody and maintaining average cost basis integrity, the system later evolved to incorporate advanced performance analytics and granular tax compliance. It is built with an Offline-First / LocalStorage architecture to ensure maximum user privacy and zero latency during heavy scenario simulations.
+Initially engineered to solve the operational complexities of tracking multi-broker custody and maintaining average cost basis integrity, the system later evolved to incorporate advanced performance analytics and granular tax compliance. It is built with a hybrid Offline-First architecture, utilising LocalStorage for zero-latency scenario simulations, seamlessly integrated with **Firebase** for secure, real-time cloud data persistence.
 
 ## ⚙️ Core Architecture & Problems Solved (The Foundation)
 
@@ -49,3 +49,4 @@ Dynamically calculates capital gains and deductions following strict Brazilian t
 ## 🛠️ Architecture Notes
 * **Framework-Agnostic Core:** This codebase was deliberately constructed using Vanilla JavaScript without heavy frameworks. The primary goal was to validate the complex mathematical models, tax rules, and state management logic through strict modularisation (MVC/SoC).
 * **Dynamic Localisation (Observer Pattern):** Instead of relying on static i18n tagging, the system implements a custom `MutationObserver` engine that dynamically intercepts and translates DOM repaints on the fly. This architectural trade-off was chosen to rapidly deploy full localisation across highly dynamic, heavily scripted UI components without risking the integrity of the underlying financial calculation logic.
+* **Cloud Persistence (Firebase):** Integrates Firebase for real-time database management and secure data storage. This hybrid approach ensures reliable cross-device synchronisation while maintaining the rapid performance benefits of an offline-first local state.
