@@ -32,7 +32,7 @@ Mathematical Auditing: Calculates complex profitability algorithms including Int
 
 Yield Tracking: Differentiates between market yield and the investor's actual Yield on Cost based on historical purchasing prices.
 
-🔄 Dynamic Tax Compliance Engine
+## 🔄 Dynamic Tax Compliance Engine
 Dynamically calculates capital gains and deductions following strict tax rules, seamlessly preparing the audited data for tax filing.
 
 Granular Rules: Strict enforcement of edge-case tax legislations, including logic to handle specific asset bundle exemptions ("Units").
