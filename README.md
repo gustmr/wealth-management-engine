@@ -1,3 +1,54 @@
+# Motor de Lógica de Portfólio e Operações de Dados Financeiros (PoC)
+
+🚀 **Demo ao Vivo:** [Clique aqui para acessar o sistema em execução](https://investments-demo.netlify.app/#) (Atualizado com as últimas funcionalidades de produção).
+
+Este projeto é uma **Prova de Conceito (PoC)** que demonstra capacidades avançadas de **reconciliação de dados financeiros**, auditoria de lógica e automação de processos assistida por IA. Nascido da necessidade de resolver desafios reais de back-office — como o rastreamento de custódia multi-corretora, conformidade fiscal e integridade do preço médio — ele evoluiu para um robusto motor de operações financeiras automatizado.
+
+Este repositório serve como uma vitrine das minhas competências centrais: traduzir lógicas regulatórias complexas em requisitos de sistema rigorosos, garantir a **integridade absoluta dos dados** e orquestrar IA para implementar modelos matemáticos de larga escala.
+
+---
+
+## 🤖 Orquestração de IA e QA de Lógica
+
+Diferente de repositórios de software tradicionais, a base de código deste projeto foi **100% gerada por modelos de IA** sob minha estrita direção estratégica. Meu papel como Especialista em Operações de Dados e QA envolveu:
+
+* **Engenharia de Prompt e Gestão de Contexto:** Definição de limites lógicos rigorosos e fórmulas matemáticas precisas para execução da IA.
+* **Debugging de Console e Testes Lógicos:** Leitura ativa de logs do navegador, isolamento de fluxos lógicos interrompidos e engenharia reversa de bugs matemáticos complexos para forçar a IA a produzir saídas impecáveis.
+* **Tradução Regulatória:** Conversão manual de mais de 50 páginas de legislação tributária densa e ambígua (ReVar/Receita Federal) em regras programáticas.
+
+---
+
+## ⚙️ Operações de Back-Office Resolvidas
+
+* **Consolidação Multi-Corretora e Integridade de Preço Médio:** Mantém a acurácia matemática rigorosa do Custo Médio em múltiplas contas de investimento. Gerencia transferências de custódia entre corretoras, garantindo que o histórico e a integridade das posições permaneçam intactos.
+* **Estado de "Time-Travel" (Auditoria Histórica):** Motor de consulta capaz de reconstruir a posição exata do portfólio, avaliação e distribuição de ativos em qualquer data específica no passado — crucial para auditoria de compliance e reconciliação histórica.
+* **Eventos Corporativos e Direitos (Data-Com):** Processa automaticamente custos médios resultantes de eventos complexos (ex: Desdobramentos/Grupamentos). O motor consulta a base histórica para determinar quantidades exatas de ações no fechamento da data-com, calculando direitos e aplicando deduções de impostos retidos na fonte automaticamente.
+* **Liquidação T+2 e Reconciliação Automatizada:** Incorpora calendários de feriados bancários para auditar datas de liquidação T+2. O sistema busca proativamente por **"dividendos órfãos"** e reconcilia saldos de conta contra notas de negociação, garantindo 100% de integridade dos dados.
+
+---
+
+## 📊 Analytics Avançado e Validação de Performance
+
+* **Auditoria Matemática:** Implementa algoritmos complexos de rentabilidade, incluindo **Taxa Interna de Retorno (TIR/XIRR)** e **TWR (Time-Weighted Return)** via Método da Bisseção, fornecendo uma visão precisa da performance baseada em fluxos de caixa irregulares.
+* **Rastreamento de Yield:** Diferencia o rendimento de mercado do *Yield on Cost* real do investidor com base nos preços históricos de compra.
+
+---
+
+## 🔄 Motor Dinâmico de Compliance Fiscal
+
+Calcula ganhos de capital e deduções seguindo regras fiscais estritas, preparando os dados auditados para a declaração anual.
+* **Regras Granulares:** Execução rigorosa de legislações específicas, incluindo lógica para lidar com isenções de pacotes de ativos ("Units").
+* **Compensação de Prejuízos:** Gerencia automaticamente a compensação de prejuízos históricos e regras de IRRF para operações de Day Trade e Swing Trade.
+
+---
+
+## 🛠️ Notas de Arquitetura Operacional
+
+* **Lógica sobre Frameworks:** Construído deliberadamente sem frameworks pesados para validar modelos matemáticos e regras fiscais através de testes de lógica pura.
+* **Persistência de Dados Híbrida:** Integra **Firebase** para gestão de banco de dados em tempo real ao lado de **LocalStorage**, garantindo sincronização entre dispositivos com latência zero para testes de simulação.
+
+---
+
 # Financial Data Operations & Portfolio Logic Engine (PoC)
 🚀 **Live Demo:** [Click here to access the running system](https://investments-demo.netlify.app/#) *(Fully updated with the latest production features, including dynamic English localisation)*
 
