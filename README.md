@@ -1,6 +1,7 @@
 # Motor de Lógica de Portfólio e Operações de Dados Financeiros (PoC)
 
 🚀 **Demo ao Vivo:** [Clique aqui para acessar o sistema em execução](https://investments-demo.netlify.app/#) (Atualizado com as últimas funcionalidades de produção).
+🚀 **Documentação Técnica (PDF):** [Visualize o Manual de Engenharia aqui]([./docs/Documentacao_Tecnica_Auditoria_Dados_Gustavo_Rocha.pdf](https://drive.google.com/file/d/1232TdPOKk_wyP01URjfV4xoWUD0EHbcu/view?usp=sharing)
 
 Este projeto é uma **Prova de Conceito (PoC)** que demonstra capacidades avançadas de **reconciliação de dados financeiros**, auditoria de lógica e automação de processos assistida por IA. Nascido da necessidade de resolver desafios reais de back-office — como o rastreamento de custódia multi-corretora, conformidade fiscal e integridade do preço médio — ele evoluiu para um robusto motor de operações financeiras automatizado.
 
