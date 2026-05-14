@@ -16,7 +16,13 @@ function verificarInconsistencias() {
     const proventosOrfaos = todosOsProventos.filter(p => !p.quantidadeNaDataCom || p.quantidadeNaDataCom <= 0);
     if (proventosOrfaos.length > 0) {
         totalInconsistencias += proventosOrfaos.length;
-        htmlResultados += `<div style="margin-top: 20px;"><h4>Proventos Órfãos (${proventosOrfaos.length})</h4><p>Os seguintes proventos foram lançados, mas não foi encontrada posição na "Data Com". Verifique o histórico do ativo ou a data do provento.</p><ul>${proventosOrfaos.map(p => `<li>${p.tipo} de <strong>${p.ticker}</strong> com pagamento em ${new Date(p.dataPagamento + 'T12:00:00').toLocaleDateString('pt-BR')}</li>`).join('')}</ul><button class="btn btn-primary" id="btn-corrigir-proventos-orfaos" style="margin-top: 15px;">Corrigir Posições Órfãs</button></div>`;
+        // Texto e ação alterados para focar em Revisão/Exclusão
+        htmlResultados += `<div style="margin-top: 20px;">
+            <h4>Proventos Órfãos (${proventosOrfaos.length})</h4>
+            <p>Os seguintes proventos foram lançados, mas não foi encontrada posição na "Data Com". Eles geram distorções nos cálculos e devem ser excluídos.</p>
+            <ul>${proventosOrfaos.map(p => `<li>${p.tipo} de <strong>${p.ticker}</strong> com pagamento em ${new Date(p.dataPagamento + 'T12:00:00').toLocaleDateString('pt-BR')}</li>`).join('')}</ul>
+            <button class="btn btn-primary" id="btn-corrigir-proventos-orfaos" style="margin-top: 15px;">Revisar Proventos Órfãos</button>
+        </div>`;
     }
 
     const posicoesAtuais = gerarPosicaoDetalhada();
@@ -398,68 +404,76 @@ async function migrarDadosCorretora(nomeAntigo, nomeNovo) {
         console.log("Nenhum registro encontrado para migração.");
     }
 }
-function salvarCorrecaoProventosOrfaos(event) {
-    event.preventDefault();
-    const linhasDeProventos = document.querySelectorAll('#lista-proventos-orfaos-container .provento-correcao-row');
-    const novosRegistrosPosicao = [];
+// Função para excluir um único provento pela interface do modal
+async function excluirProventoOrfaoIndividual(id) {
+    // Aproveita a função nativa que já cuida de tudo (Banco local e Firebase)
+    await deletarProvento(id);
+    
+    // Atualiza a tabela do modal ou fecha se não sobrar nenhum
+    const orfaosRestantes = todosOsProventos.filter(p => !p.quantidadeNaDataCom || p.quantidadeNaDataCom <= 0);
+    if (orfaosRestantes.length > 0) {
+        abrirModalCorrecaoProventosOrfaos(orfaosRestantes);
+    } else {
+        fecharModal('modal-corrigir-proventos-orfaos');
+    }
+    
+    // Atualiza a tela de background
+    verificarInconsistencias();
+}
 
-    linhasDeProventos.forEach(row => {
-        const precoMedioInput = row.querySelector('.provento-correcao-pm');
-        const precoMedio = precoMedioInput ? parseDecimal(precoMedioInput.value) : 0;
-        const posicoesPorCorretora = [];
-        
-        row.querySelectorAll('.linha-corretora-correcao').forEach(corretoraRow => {
-            const corretora = corretoraRow.querySelector('.provento-correcao-corretora').value;
-            const quantidadeInput = corretoraRow.querySelector('.provento-correcao-qtd');
-            const quantidade = quantidadeInput ? parseInt(quantidadeInput.value, 10) : 0;
-            
-            if (corretora && quantidade > 0) {
-                posicoesPorCorretora.push({ corretora, quantidade });
-            }
-        });
+// Função para exclusão em massa com lógica segura para o Firebase
+async function excluirTodosProventosOrfaos() {
+    const proventosOrfaos = todosOsProventos.filter(p => !p.quantidadeNaDataCom || p.quantidadeNaDataCom <= 0);
+    
+    if (proventosOrfaos.length === 0) return;
 
-        if (precoMedio > 0 && posicoesPorCorretora.length > 0) {
-            novosRegistrosPosicao.push({
-                id: Date.now() + Math.random(),
-                tipoRegistro: 'SUMARIO_MANUAL',
-                ticker: row.dataset.ticker,
-                data: row.dataset.datacom,
-                precoMedio: precoMedio,
-                posicoesPorCorretora: posicoesPorCorretora
-            });
-        }
-    });
-
-    if (novosRegistrosPosicao.length === 0) {
-        alert('Nenhum dado válido preenchido. Nenhuma posição foi salva.');
+    if (!confirm(`ATENÇÃO: Tem certeza que deseja excluir TODOS os ${proventosOrfaos.length} proventos órfãos de uma vez? Esta ação não pode ser desfeita.`)) {
         return;
     }
 
-    posicaoInicial.push(...novosRegistrosPosicao);
-    salvarPosicaoInicial();
+    const idsOrfaos = proventosOrfaos.map(p => p.id);
 
-    let proventosCorrigidosCount = 0;
-    todosOsProventos.forEach(provento => {
-        const isAffected = novosRegistrosPosicao.some(newPos =>
-            newPos.ticker === provento.ticker && newPos.data === provento.dataCom
-        );
+    // 1. Achar as movimentações financeiras vinculadas a estes proventos
+    const movimentacoesVinculadas = todasAsMovimentacoes.filter(t => 
+        (t.source === 'provento' || t.source === 'provento_editado') && idsOrfaos.includes(t.sourceId)
+    );
 
-        if (isAffected && (!provento.quantidadeNaDataCom || provento.quantidadeNaDataCom <= 0)) {
-            const dadosRecalculados = calcularDadosProvento(provento.ticker, provento.dataCom, provento.valorIndividual);
-            Object.assign(provento, dadosRecalculados);
-            sincronizarProventoComTransacao(provento.id);
-            proventosCorrigidosCount++;
+    // 2. Tenta Excluir no Firebase Finanças da Casa de uma vez (Lógica segura com fallback)
+    if (typeof currentUser !== 'undefined' && currentUser && typeof idCasaAssociada !== 'undefined' && idCasaAssociada && movimentacoesVinculadas.length > 0) {
+        try {
+            const { writeBatch, doc } = window.dbFunctions;
+            const batch = writeBatch(window.db);
+            let lancamentosRemotosExcluidos = 0;
+
+            movimentacoesVinculadas.forEach(mov => {
+                if (mov.idLancamentoCasa) {
+                    const docRef = doc(window.db, "Casas", idCasaAssociada, "Lancamentos", mov.idLancamentoCasa);
+                    batch.delete(docRef);
+                    lancamentosRemotosExcluidos++;
+                }
+            });
+
+            if (lancamentosRemotosExcluidos > 0) {
+                await batch.commit();
+                console.log(`${lancamentosRemotosExcluidos} lançamento(s) de proventos órfãos excluído(s) do Finanças.`);
+            }
+        } catch (error) {
+            console.error("Erro ao tentar excluir lançamentos em lote do Finanças:", error);
         }
-    });
-
-    salvarProventos();
-    salvarMovimentacoes(); // CORREÇÃO AQUI
-
-    alert(`${novosRegistrosPosicao.length} registro(s) de posição foram criados e ${proventosCorrigidosCount} provento(s) foram corrigidos e sincronizados automaticamente!`);
-    
-    modalCorrigirProventosOrfaos.style.display = 'none';
-    
-    if (telas.configuracoes.style.display === 'block') {
-        verificarInconsistencias();
     }
+
+    // 3. Limpar Localmente
+    todosOsProventos = todosOsProventos.filter(p => !idsOrfaos.includes(p.id));
+    todasAsMovimentacoes = todasAsMovimentacoes.filter(t => 
+        !( (t.source === 'provento' || t.source === 'provento_editado') && idsOrfaos.includes(t.sourceId) )
+    );
+
+    // 4. Salvar na persistência
+    await salvarProventos();
+    await salvarMovimentacoes();
+
+    // 5. Atualizar Interface
+    fecharModal('modal-corrigir-proventos-orfaos');
+    alert(`${idsOrfaos.length} proventos órfãos foram excluídos com sucesso da sua base de dados.`);
+    verificarInconsistencias();
 }
