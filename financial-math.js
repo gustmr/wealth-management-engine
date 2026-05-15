@@ -911,9 +911,6 @@ function gerarDadosGraficoDesempenho(dataInicio) {
 
     if (historicoFiltrado.length < 2) return null;
 
-    // --- CORREÇÃO DE INÍCIO REAL ---
-    // Mesmo que o usuário peça 5 anos, se só tivermos 1 ano de dados,
-    // o "zero" do gráfico deve ser o primeiro dado disponível.
     const dataRealInicio = historicoFiltrado[0].data;
 
     // 2. Identifica TODOS os ativos presentes no período
@@ -944,20 +941,13 @@ function gerarDadosGraficoDesempenho(dataInicio) {
     });
 
     const memoriaAtivos = {}; 
-    
-    // Variáveis de controle da SELIC
     let selicAcumuladaBruta = 1.0; 
-    // O ponto de partida do cálculo agora é a Data Real do primeiro snapshot
     let ultimaDataSelicCalculada = new Date(dataRealInicio + 'T12:00:00'); 
-    
-    // Recupera histórico SELIC salvo (ou vazio se não houver)
     const dbSelic = dadosDeMercado.historicoSelic || [];
 
-    // Função auxiliar para obter taxa Selic de uma data específica
     const getTaxaSelicDia = (dataRef) => {
         if (dbSelic.length === 0) return 10.0; 
         const dataStr = dataRef.toISOString().split('T')[0];
-        
         let taxaEncontrada = dbSelic.find(d => d.data === dataStr);
         if (!taxaEncontrada) {
             const anteriores = dbSelic.filter(d => d.data <= dataStr);
@@ -966,12 +956,11 @@ function gerarDadosGraficoDesempenho(dataInicio) {
         return taxaEncontrada ? taxaEncontrada.valor : 10.0;
     };
 
-    // Função Tabela Regressiva IR
     const getAliquotaIR = (diasCorridos) => {
-        if (diasCorridos <= 180) return 0.225; // 22.5%
-        if (diasCorridos <= 360) return 0.20;  // 20.0%
-        if (diasCorridos <= 720) return 0.175; // 17.5%
-        return 0.15;  // 15.0%
+        if (diasCorridos <= 180) return 0.225;
+        if (diasCorridos <= 360) return 0.20; 
+        if (diasCorridos <= 720) return 0.175;
+        return 0.15;
     };
 
     // 4. Loop Principal: Processa dia a dia
@@ -981,12 +970,9 @@ function gerarDadosGraficoDesempenho(dataInicio) {
         const dataSnapAtualObj = new Date(snapAtual.data + 'T12:00:00');
 
         // --- CÁLCULO DA SELIC ENTRE SNAPSHOTS ---
-        // Clona a data para não alterar a original e percorre os dias entre snapshots
         let iteradorData = new Date(ultimaDataSelicCalculada);
         iteradorData.setDate(iteradorData.getDate() + 1); 
 
-        // Se for o primeiro ponto (i=0), não há intervalo anterior para calcular juros,
-        // mas precisamos garantir que o valor inicial seja 0% (push no final do loop).
         if (i > 0) {
             while (iteradorData <= dataSnapAtualObj) {
                 if (isDiaUtil(iteradorData)) {
@@ -999,7 +985,6 @@ function gerarDadosGraficoDesempenho(dataInicio) {
             ultimaDataSelicCalculada = new Date(dataSnapAtualObj); 
         }
 
-        // Calcula SELIC LÍQUIDA para o ponto atual usando a DATA REAL DE INÍCIO
         const diffTempo = Math.abs(dataSnapAtualObj - new Date(dataRealInicio + 'T12:00:00'));
         const diasCorridosDesdeInicio = Math.ceil(diffTempo / (1000 * 60 * 60 * 24)); 
         const aliquota = getAliquotaIR(diasCorridosDesdeInicio);
@@ -1011,10 +996,7 @@ function gerarDadosGraficoDesempenho(dataInicio) {
         series['SELIC'].dados.push(selicResultadoLiquido);
         series['SELIC'].ultimoValorValido = selicResultadoLiquido;
 
-
         // --- A. RECONSTRUÇÃO DOS VALORES DO DIA ---
-        
-        // 1. Índices
         let valIBOV = snapAtual.ibov || 0;
         if (valIBOV <= 0 && series['IBOV'].ultimoValorValido > 0) valIBOV = series['IBOV'].ultimoValorValido;
         if (valIBOV > 0) series['IBOV'].ultimoValorValido = valIBOV;
@@ -1023,7 +1005,6 @@ function gerarDadosGraficoDesempenho(dataInicio) {
         if (valIFIX <= 0 && series['IFIX'].ultimoValorValido > 0) valIFIX = series['IFIX'].ultimoValorValido;
         if (valIFIX > 0) series['IFIX'].ultimoValorValido = valIFIX;
 
-        // 2. Ativos e Categorias
         const valoresCorrigidosHoje = {};
         const totaisCategoriaHoje = { 'Ações': 0, 'FIIs': 0, 'Carteira RV': 0 };
 
@@ -1042,21 +1023,11 @@ function gerarDadosGraficoDesempenho(dataInicio) {
 
             const valMemoria = memoriaAtivos[ticker] || 0;
 
-            if (valAtivo <= 1 && valMemoria > 10) {
-                if (!dadosSnap && snapAnterior) {
-                    const houveVendaOuSaida = 
-                        todasAsNotas.some(n => n.data > snapAnterior.data && n.data <= snapAtual.data && n.operacoes.some(op => op.ativo === ticker && op.tipo === 'venda')) ||
-                        posicaoInicial.some(p => p.tipoRegistro === 'TRANSACAO_HISTORICA' && p.ticker === ticker && p.transacao.toLowerCase() === 'venda' && p.data > snapAnterior.data && p.data <= snapAtual.data) ||
-                        todosOsAjustes.some(a => a.tipoAjuste === 'evento_ativo' && a.tipoEvento === 'saida' && a.ticker === ticker && a.data > snapAnterior.data && a.data <= snapAtual.data);
-
-                    if (!houveVendaOuSaida) {
-                        valAtivo = valMemoria;
-                    } else {
-                        delete memoriaAtivos[ticker];
-                    }
-                } else if (quantidade > 0) {
-                    valAtivo = valMemoria;
-                }
+            if (quantidade <= 0.0001) {
+                valAtivo = 0;
+                delete memoriaAtivos[ticker]; 
+            } else if (valAtivo <= 1 && valMemoria > 10) {
+                valAtivo = valMemoria;
             }
 
             if (valAtivo > 0) {
@@ -1071,17 +1042,12 @@ function gerarDadosGraficoDesempenho(dataInicio) {
                         totaisCategoriaHoje[cat] += valAtivo;
                     }
                 }
-            } else {
-                if ((dadosSnap && dadosSnap.quantidade === 0) || (!dadosSnap && !memoriaAtivos[ticker])) {
-                     delete memoriaAtivos[ticker];
-                }
             }
         });
 
         // --- B. CÁLCULO DA RENTABILIDADE (Séries RV) ---
-        
         Object.keys(series).forEach(nomeSerie => {
-            if (nomeSerie === 'SELIC') return; // Já processado
+            if (nomeSerie === 'SELIC') return;
 
             const serie = series[nomeSerie];
             let valorAtual = 0;
@@ -1108,7 +1074,7 @@ function gerarDadosGraficoDesempenho(dataInicio) {
 
             const valorAnterior = serie.ultimoValorValido;
 
-            if (valorAtual <= 0.01) {
+            if (valorAtual <= 0.01 && valorAnterior <= 0.01) {
                 serie.dados.push(null);
                 serie.ultimoValorValido = 0; 
                 return;
@@ -1124,9 +1090,35 @@ function gerarDadosGraficoDesempenho(dataInicio) {
             const fluxoLiquido = calcularFluxoLiquidoPeriodo(nomeSerie, serie.tipo, snapAnterior.data, snapAtual.data);
             const proventosRecebidos = calcularProventosRecebidosPeriodo(nomeSerie, serie.tipo, snapAnterior.data, snapAtual.data);
 
-            const lucroPeriodo = valorAtual - valorAnterior - fluxoLiquido + proventosRecebidos;
-            const denominador = valorAnterior > 1 ? valorAnterior : (fluxoLiquido > 0 ? fluxoLiquido : 1);
-            const rentabilidadeDia = lucroPeriodo / denominador;
+            let rentabilidadeDia = 0;
+
+            if (valorAnterior <= 1 && Math.abs(fluxoLiquido) <= 0.01) {
+                rentabilidadeDia = 0;
+            } else {
+                // A SOLUÇÃO: O capital que sofre a variação do mercado é o saldo inicial somado ao aporte do dia.
+                let denominador = valorAnterior + (fluxoLiquido > 0 ? fluxoLiquido : 0);
+                
+                // Trava de segurança extra contra divisões por zero absolutas
+                if (denominador < 1) denominador = 1;
+
+                const lucroPeriodo = valorAtual - valorAnterior - fluxoLiquido + proventosRecebidos;
+                rentabilidadeDia = lucroPeriodo / denominador;
+
+                // --- OS 3 FILTROS DE SANIDADE MATEMÁTICA ---
+                if (proventosRecebidos > (denominador * 0.10)) {
+                    rentabilidadeDia = 0;
+                } 
+                else if (serie.tipo === 'categoria') {
+                    if (rentabilidadeDia > 0.25 || rentabilidadeDia < -0.25) {
+                        rentabilidadeDia = 0;
+                    }
+                }
+                else if (serie.tipo === 'ativo') {
+                    if (rentabilidadeDia > 0.80 || rentabilidadeDia < -0.80) {
+                        rentabilidadeDia = 0;
+                    }
+                }
+            }
 
             serie.acumulado = serie.acumulado * (1 + rentabilidadeDia);
             serie.dados.push(serie.acumulado - 1);
@@ -1139,7 +1131,6 @@ function gerarDadosGraficoDesempenho(dataInicio) {
     const datasets = [];
     let colorIndex = 0;
     
-    // SELIC adicionada
     const prioridade = ['Carteira RV', 'SELIC', 'IBOV', 'IFIX', 'Ações', 'FIIs'];
 
     const chavesOrdenadas = Object.keys(series).sort((a, b) => {
