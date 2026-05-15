@@ -509,16 +509,23 @@ function salvarEdicaoSaldoLiquidoRF(ativoRFId, novoSaldoStr) {
     const ativo = todosOsAtivosRF.find(a => a.id === ativoRFId);
     
     if (ativo && !isNaN(novoSaldo)) {
-        const dataEdicao = new Date().toISOString().split('T')[0];
-        
-        // --- INÍCIO DA ALTERAÇÃO ---
-        // Agora, usa a nova função auxiliar para obter o capital investido APENAS no ciclo atual.
-        const valorInvestidoTotalAtual = getCapitalInvestidoNoCicloAtual(ativo, dataEdicao);
-        // --- FIM DA ALTERAÇÃO ---
+            const dataEdicao = new Date().toISOString().split('T')[0];
+            
+            // Descobre o corte temporal do ciclo atual
+            const dataDeCorte = getDataInicioCicloAtualRF(ativo);
+            
+            // Obtém o capital investido (soma dos aportes)
+            const valorInvestidoTotalAtual = getCapitalInvestidoNoCicloAtual(ativo, dataEdicao);
+            
+            // O SEGREDO: Calcula tudo o que já foi sacado neste ciclo
+            const resgatesTotais = todasAsMovimentacoes
+                .filter(t => t.source === 'resgate_rf' && t.sourceId === ativo.id && t.data <= dataEdicao && t.data > dataDeCorte)
+                .reduce((sum, m) => sum + Math.abs(m.valor), 0);
 
-        const rendimentoTotalBruto = novoSaldo - valorInvestidoTotalAtual;
+            // A Fórmula do Espelho Reverso: Saldo + Saques - Aportes = Rendimento Real
+            const rendimentoTotalBruto = novoSaldo - valorInvestidoTotalAtual + resgatesTotais;
 
-        const indexExistente = todosOsRendimentosRFNaoRealizados.findIndex(
+            const indexExistente = todosOsRendimentosRFNaoRealizados.findIndex(
             r => r.ativoId === ativo.id && r.data === dataEdicao
         );
 
