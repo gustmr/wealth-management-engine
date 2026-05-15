@@ -100,6 +100,7 @@ let ultimaAssinaturaAtivos = ''; // Variável para controlar se a lista de ativo
 let calculatorTargetInput = null;
 let calculatorDisplay;
 let unsubcribeFirestoreListener = null;
+window.isInitialSyncComplete = false; // Trava de segurança mestre
 
 // ****************************
 
@@ -2521,16 +2522,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // O OBSERVADOR PRINCIPAL DA APLICAÇÃO
     onAuthStateChanged(auth, async (user) => {
         if (user) {
-            // --- MODO ONLINE (USUÁRIO LOGADO) ---
             console.log("Usuário autenticado. Iniciando modo ONLINE (Fonte de verdade: Nuvem).");
             currentUser = user;
-            
-            // Exibe loading enquanto conecta e baixa os dados reais
             loadingOverlay.style.display = 'flex';
-
             const { doc, getDoc } = window.dbFunctions;
 
-            // 1. Busca o idCasaAssociada (Metadados do usuário)
             try {
                 const userProfileRef = doc(window.db, "Usuarios", user.uid);
                 const userProfileSnap = await getDoc(userProfileRef);
@@ -2546,26 +2542,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 idCasaAssociada = null;
             }
 
-            // 2. Inicia o listener
-            // Ele vai baixar os dados, atualizar as variáveis,
-            // verificar o autoUpdate e remover o loadingOverlay.
-            iniciarListenerDaCarteira(); 
+            // NOVO: A função iniciarListenerDaCarteira() agora deve sinalizar quando terminar.
+            // Para garantir a trava, mudamos de `iniciarListenerDaCarteira();` para um fluxo assíncrono.
+            await iniciarListenerDaCarteira(); 
+            
+            // NOVO: Libera a trava apenas APÓS o listener terminar de preencher as variáveis.
+            window.isInitialSyncComplete = true; 
+            
+            // NOVO: Agora que é seguro, roda o AutoUpdate.
+            if (autoUpdateEnabled && typeof iniciarAutoUpdate === 'function') {
+                iniciarAutoUpdate();
+            }
 
             mainContent.style.display = 'block';
             sidebar.style.display = 'flex';
             sidebarLoginForm.style.display = 'none';
             userEmailSpan.textContent = user.email;
             userInfoDisplay.style.display = 'block';
-
-            // Nota: Não chamamos renderizarDashboard() aqui manualmente. 
-            // O listener chamará assim que os dados estiverem prontos.
             mostrarTela('dashboard');
 
         } else {
-            // --- MODO OFFLINE (DESLOGADO OU PRIMEIRO ACESSO) ---
             console.log("Sem usuário. Iniciando modo OFFLINE (Fonte de verdade: LocalStorage).");
             currentUser = null;
-            idCasaAssociada = null; // Limpa a associação da casa
+            idCasaAssociada = null; 
             
             if (unsubcribeFirestoreListener) {
                 unsubcribeFirestoreListener(); 
@@ -2573,36 +2572,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             pararAutoUpdate();
             
-            // --- GATILHO DA VERSÃO DEMO ---
-            // Substitua 'SUA-URL-AQUI' por um pedaço do seu link Netlify (ex: 'meu-portfolio-demo.netlify.app')
-            const isDemoURL = window.location.hostname.includes('investments-demo.netlify.app') || window.location.search.includes('demo=true');
-            const userLoggedOutManually = localStorage.getItem('demoLoggedOut') === 'true';
-
-            if (isDemoURL && !userLoggedOutManually) {
-                console.log("Iniciando ambiente de demonstração automatizado...");
-                loadingOverlay.style.display = 'flex';
-                
-                try {
-                    // Alterado para iniciar em Português (Brasil)
-                    if (typeof changeLanguage === 'function') {
-                        changeLanguage('pt-BR');
-                    }
-                    
-                    // Faz o login automático com os dados fictícios
-                    await signInWithEmailAndPassword(auth, 'demo@gmail.com', '123456');
-                    
-                    // O return interrompe aqui, pois o onAuthStateChanged será 
-                    // disparado novamente assim que o login acima concluir.
-                    return; 
-                } catch (error) {
-                    console.error("Erro ao iniciar conta de demonstração:", error);
-                    loadingOverlay.style.display = 'none';
-                }
-            }
-            // ------------------------------
-
-            // Carrega os dados do localStorage (Ambiente de Teste)
             await carregarDadosDoLocalStorage();
+            
+            // NOVO: No modo offline, não há Firebase para baixar, então liberamos a trava imediatamente.
+            window.isInitialSyncComplete = true;
+            
+            // NOVO: Se tiver AutoUpdate ativo localmente, pode rodar.
+            if (autoUpdateEnabled && typeof iniciarAutoUpdate === 'function') {
+                iniciarAutoUpdate();
+            }
             
             mainContent.style.display = 'block';
             sidebar.style.display = 'flex';
@@ -2611,7 +2589,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             renderizarDashboard();
             mostrarTela('dashboard');
-            loadingOverlay.style.display = 'none'; // Garante que o loading saia no modo offline
+            loadingOverlay.style.display = 'none'; 
         }
     });
 

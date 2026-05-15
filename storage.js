@@ -1512,7 +1512,7 @@ function salvarSnapshotCarteira(silencioso = false) {
             if (confirm(`Já existe um snapshot de ${formatarMoeda(historicoCarteira[indexExistente].patrimonioTotal)} para hoje. Deseja atualizá-lo para ${formatarMoeda(novoSnapshot.patrimonioTotal)}?`)) {
                 historicoCarteira[indexExistente] = novoSnapshot;
             } else {
-                return; 
+                return Promise.resolve(); 
             }
         } else { 
             historicoCarteira[indexExistente] = novoSnapshot;
@@ -1523,7 +1523,8 @@ function salvarSnapshotCarteira(silencioso = false) {
 
     historicoCarteira.sort((a, b) => new Date(a.data) - new Date(b.data));
     
-    salvarHistoricoCarteira();
+    // Retorna a Promise de salvamento para que o api-quotes possa aguardar
+    const promessaSalvamento = salvarHistoricoCarteira();
 
     if (!silencioso) {
         const dataFormatada = new Date(hoje + 'T12:00:00').toLocaleDateString('pt-BR');
@@ -1534,6 +1535,8 @@ function salvarSnapshotCarteira(silencioso = false) {
     if (telas.dashboard.style.display === 'block') {
         renderizarDashboard();
     }
+
+    return promessaSalvamento;
 }
 async function carregarTodosOsDados() {
     const dadosDaNuvem = await carregarDadosDoFirestore();

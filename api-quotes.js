@@ -73,6 +73,12 @@ async function atualizarCotacoesComAPI(silencioso = false) {
         return;
     }
 
+    // Trava Arquitetural: Se a sincronização inicial não terminou, cancela.
+    if (!window.isInitialSyncComplete) {
+        console.warn("Atualização de cotações abortada: Sincronização inicial do Firebase ainda não foi concluída.");
+        return;
+    }
+
     // --- SETUP VISUAL (Apenas modo Manual) ---
     const btnPrincipal = document.getElementById('btn-atualizar-cotacoes-api');
     const iconPrincipal = btnPrincipal ? btnPrincipal.querySelector('i') : null;
@@ -118,18 +124,22 @@ async function atualizarCotacoesComAPI(silencioso = false) {
         if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
         const csvText = await response.text();
         
-        // OTIMIZAÇÃO CRÍTICA: Processa os dados ANTES da animação
-        // Isso garante que o sistema esteja atualizado em milissegundos
+        // Processa as novas cotações
         processarArquivoCotacoes(csvText, silencioso);
 
-        // --- 3. ANIMAÇÃO VISUAL (Apenas cosmética e se não for silencioso) ---
+        // --- SALVAMENTO ATRELADO ---
+        // Assim que as cotações novas entram, tiramos a foto da carteira silenciosamente.
+        logNoSistema('Consolidando Snapshot Diário...', 'info');
+        if (typeof salvarSnapshotCarteira === 'function') {
+            await salvarSnapshotCarteira(true);
+        }
+
+        // --- 3. ANIMAÇÃO VISUAL ---
         if (!silencioso) {
             const linhas = csvText.split('\n');
             const totalLinhas = linhas.length;
             logNoSistema(`Processados ${totalLinhas} registros com sucesso.`, 'sucesso');
             
-            // Loop Visual Acelerado (Apenas para feedback "Matrix")
-            // Pulamos linhas para ser mais rápido visualmente
             const passo = totalLinhas > 50 ? Math.floor(totalLinhas / 10) : 1; 
             
             for (let i = 1; i < totalLinhas; i += passo) {
@@ -138,15 +148,12 @@ async function atualizarCotacoesComAPI(silencioso = false) {
                     const ticker = colunas[0].trim().toUpperCase();
                     const valor = colunas[1].trim();
                     
-                    // Mapa de nomes amigáveis
                     const MAPA = { 'IBOV': 'IBOV', 'IFIX': 'IFIX', 'USDBRL=X': 'Dólar', 'EURBRL=X': 'Euro', 'CDI': 'CDI', 'SELIC': 'Selic' };
                     
                     if (MAPA[ticker] || ticker === 'IBOV' || ticker === 'IFIX') {
-                         // Mostra itens importantes com destaque
                         logNoSistema(`${MAPA[ticker] || ticker}: ${valor}`, 'indice');
-                        await new Promise(r => setTimeout(r, 100)); // Delay pequeno para leitura
+                        await new Promise(r => setTimeout(r, 100)); 
                     } else {
-                        // Passa rápido pelos ativos comuns
                         logNoSistema(`Sincronizado: ${ticker}...`);
                         await new Promise(r => setTimeout(r, 20)); 
                     }
@@ -154,7 +161,7 @@ async function atualizarCotacoesComAPI(silencioso = false) {
             }
 
             logNoSistema('Atualizando Dashboard...', 'info');
-            await new Promise(r => setTimeout(r, 500)); // Pausa dramática final
+            await new Promise(r => setTimeout(r, 500)); 
             logNoSistema('SISTEMA ATUALIZADO.', 'sucesso');
             mostrarFeedbackAtualizacao('Cotações Atualizadas!', 'success');
             
