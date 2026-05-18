@@ -2787,6 +2787,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     // --- FIM: LÓGICA PARA CÁLCULO INLINE ---
+    // =====================================================================
+    // --- INÍCIO: ATUALIZAÇÃO DINÂMICA DOS TOTAIS DA NOTA ---
+    // Adicione este bloco abaixo para resolver a atualização simultânea
+    ['nota-custos', 'nota-irrf'].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('input', atualizarTotais);
+            input.addEventListener('change', atualizarTotais);
+        }
+    });
+    // --- FIM: ATUALIZAÇÃO DINÂMICA DOS TOTAIS DA NOTA ---
+    // =====================================================================
     // Ativa a formatação de moeda para os campos de valor das notas
     // --- LÓGICA PARA PREENCHIMENTO AUTOMÁTICO DA ALÍQUOTA DE IR (MODAL INDIVIDUAL) ---
     // Substitua o bloco anterior por este:
