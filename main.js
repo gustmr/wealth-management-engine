@@ -103,11 +103,17 @@ let unsubcribeFirestoreListener = null;
 window.isInitialSyncComplete = false; // Trava de segurança mestre
 
 // ****************************
+// --- AJUSTE DINÂMICO DO TÍTULO ---
+const isDemoURL = window.location.hostname.includes('investments-demo.netlify.app') || window.location.search.includes('demo=true');
+if (isDemoURL) {
+    document.title = "DEMO";
+}
+// *****************************
 
 document.addEventListener('DOMContentLoaded', () => {
     mainContent = document.querySelector('.main-content');
     sidebar = document.querySelector('.sidebar');
-    // --- INICIALIZAÃ‡ÃƒO DO IDIOMA (i18n) ---
+    // --- INICIALIZAÇÃO DO IDIOMA (i18n) ---
     const savedLanguage = localStorage.getItem('userLanguage') || 'pt-BR';
     if(typeof changeLanguage === 'function') {
         changeLanguage(savedLanguage);
@@ -2497,7 +2503,7 @@ document.addEventListener('DOMContentLoaded', () => {
             header.classList.toggle('ativo');
         }
     });
-// --- INÍCIO: NOVA LÓGICA DE AUTENTICAÇÃO E FLUXO DA APLICAÇÃO (OTIMIZADA) ---
+    // --- INÍCIO: NOVA LÓGICA DE AUTENTICAÇÃO E FLUXO DA APLICAÇÃO (OTIMIZADA) ---
     const auth = window.auth;
     const { 
         onAuthStateChanged, 
@@ -2505,13 +2511,11 @@ document.addEventListener('DOMContentLoaded', () => {
         signInWithEmailAndPassword, 
         signOut 
     } = window.authFunctions;
-    
     // Listener para filtro de notas em tempo real
     const inputFiltroNotas = document.getElementById('filtro-nota-ativo');
     if (inputFiltroNotas) {
         inputFiltroNotas.addEventListener('input', renderizarListaNotas);
     }
-    
     // Referências aos novos elementos da interface
     const sidebarLoginForm = document.getElementById('sidebar-login-form');
     const userInfoDisplay = document.getElementById('user-info');
@@ -2562,9 +2566,10 @@ document.addEventListener('DOMContentLoaded', () => {
             mostrarTela('dashboard');
 
         } else {
+            // --- MODO OFFLINE (DESLOGADO OU PRIMEIRO ACESSO) ---
             console.log("Sem usuário. Iniciando modo OFFLINE (Fonte de verdade: LocalStorage).");
             currentUser = null;
-            idCasaAssociada = null; 
+            idCasaAssociada = null; // Limpa a associação da casa
             
             if (unsubcribeFirestoreListener) {
                 unsubcribeFirestoreListener(); 
@@ -2572,15 +2577,36 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             pararAutoUpdate();
             
-            await carregarDadosDoLocalStorage();
-            
-            // NOVO: No modo offline, não há Firebase para baixar, então liberamos a trava imediatamente.
-            window.isInitialSyncComplete = true;
-            
-            // NOVO: Se tiver AutoUpdate ativo localmente, pode rodar.
-            if (autoUpdateEnabled && typeof iniciarAutoUpdate === 'function') {
-                iniciarAutoUpdate();
+            // --- GATILHO DA VERSÃO DEMO ---
+            // Substitua 'SUA-URL-AQUI' por um pedaço do seu link Netlify (ex: 'meu-portfolio-demo.netlify.app')
+            const isDemoURL = window.location.hostname.includes('investments-demo.netlify.app') || window.location.search.includes('demo=true');
+            const userLoggedOutManually = localStorage.getItem('demoLoggedOut') === 'true';
+
+            if (isDemoURL && !userLoggedOutManually) {
+                console.log("Iniciando ambiente de demonstração automatizado...");
+                loadingOverlay.style.display = 'flex';
+                
+                try {
+                    // Alterado para iniciar em Português (Brasil)
+                    if (typeof changeLanguage === 'function') {
+                        changeLanguage('pt-BR');
+                    }
+                    
+                    // Faz o login automático com os dados fictícios
+                    await signInWithEmailAndPassword(auth, 'demo@gmail.com', '123456');
+                    
+                    // O return interrompe aqui, pois o onAuthStateChanged será 
+                    // disparado novamente assim que o login acima concluir.
+                    return; 
+                } catch (error) {
+                    console.error("Erro ao iniciar conta de demonstração:", error);
+                    loadingOverlay.style.display = 'none';
+                }
             }
+            // ------------------------------
+
+            // Carrega os dados do localStorage (Ambiente de Teste)
+            await carregarDadosDoLocalStorage();
             
             mainContent.style.display = 'block';
             sidebar.style.display = 'flex';
@@ -2589,10 +2615,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             renderizarDashboard();
             mostrarTela('dashboard');
-            loadingOverlay.style.display = 'none'; 
+            loadingOverlay.style.display = 'none'; // Garante que o loading saia no modo offline
         }
     });
-
     // --- LISTENERS DOS GRÁFICOS (CORREÇÃO DEFINITIVA) ---
 
     // 1. Proteção Geral: Impede que cliques nos controles fechem qualquer modal
@@ -2666,10 +2691,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Listener para o botão de logout
     document.getElementById('btn-logout').addEventListener('click', () => {
         if (confirm('Deseja realmente sair? Seus dados locais serão limpos para garantir sua privacidade.')) {
-            // --- GATILHO DA VERSÃO DEMO ---
-            // Marca que o usuário deslogou manualmente para evitar loop de login na Demo
-            localStorage.setItem('demoLoggedOut', 'true');
-            
             limparDadosLocais();
             signOut(auth);
         }
@@ -2786,7 +2807,6 @@ document.addEventListener('DOMContentLoaded', () => {
             element.addEventListener('keydown', handleInlineCalculation);
         }
     });
-    // --- FIM: LÓGICA PARA CÁLCULO INLINE ---
     // =====================================================================
     // --- INÍCIO: ATUALIZAÇÃO DINÂMICA DOS TOTAIS DA NOTA E RATEIO ---
     ['nota-custos', 'nota-irrf'].forEach(id => {
